@@ -1,0 +1,114 @@
+// nexQ-Deposit data model (PostgreSQL).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Status/role are kept as plain strings (fixed vocabulary) so app code can pass
+// literals freely. Postgres enums are an option later if you want DB-level checks:
+//   Role:     CLIENT | TECHNICAL
+//   TxStatus: PENDING | LINK_GENERATED | PAID | CREDITED | CREDIT_FAILED | FAILED
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  role      String   @default("CLIENT")
+  accounts  TradingAccount[]
+  txns      Transaction[]
+  createdAt DateTime @default(now())
+}
+
+model TradingAccount {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  // MT5 login (account number) this deposit will credit
+  mt5Login  String
+  label     String?  // friendly name shown in the form
+  currency  String   @default("USD")
+  group     String?  // MT5 group, optional override
+  isActive  Boolean  @default(true)
+  txns      Transaction[]
+  createdAt DateTime @default(now())
+
+  @@unique([userId, mt5Login])
+}
+
+model Transaction {
+  id              String          @id @default(cuid())
+  // Optional links — public (no-login) deposits leave these null and rely on
+  // the fields below. Admin-created/registered deposits may still set them.
+  user            User?           @relation(fields: [userId], references: [id])
+  userId          String?
+  account         TradingAccount? @relation(fields: [accountId], references: [id])
+  accountId       String?
+
+  // Public deposit details (entered on the open deposit page)
+  mt5Login        String          // MT5 account number to credit
+  clientEmail     String?
+  clientName      String?
+
+  amount          Float          // deposit amount credited to MT5
+  fee             Float          @default(0) // fee added on top; client pays amount + fee
+  currency        String         @default("USD")
+  status          String         @default("PENDING")
+
+  // Our reference sent to Rival so we can correlate the payment
+  reference       String         @unique
+
+  // Rival / WhishPay
+  rivalPaymentId  String?
+  whishpayUrl     String?
+
+  // MT5 result
+  mt5DealId       String?
+  mt5Message      String?
+  // Concurrency lock: set while an MT5 credit is in progress so concurrent
+  // polls/sweeps can't double-credit. Cleared when the credit settles.
+  creditingAt     DateTime?
+
+  // Free-form audit of provider payloads
+  providerPayload String?        // JSON string of last provider/webhook payload
+  errorMessage    String?
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+// Singleton-style config rows edited from the Technical dashboard.
+
+model ProviderConfig {
+  id                String   @id @default("rival")
+  apiKey            String?  // Rival company key: tsk_<prefix>_<secret> (sent as Bearer)
+  baseUrl           String?  @default("https://staging.portal.rivalpayments.com/v1")
+  createPaymentPath String?  @default("/integrations/whish/payments")
+  statusPath        String?  @default("/integrations/whish/payments/{id}")
+  healthPath        String?  @default("/health")
+  minDeposit        Float    @default(0) // minimum allowed deposit amount
+  webhookSecret     String?  // shared secret to verify incoming Rival webhooks
+  enabled           Boolean  @default(false)
+  updatedAt         DateTime @updatedAt
+}
+
+model Mt5Config {
+  id           String   @id @default("mt5")
+  // MT5 WebAPI connection (entered in Settings; the app talks WebAPI directly).
+  // NOTE: store-at-rest only; encrypt these columns before production use.
+  mt5Server    String?  // WebAPI host:port, e.g. 185.67.127.231:443
+  mt5Login     String?  // WebAPI manager login (number)
+  mt5Password  String?  // WebAPI manager password
+  cryptMethod  String?  @default("NONE") // NONE | AES256OFB (broker dependent)
+  defaultGroup String?  // default MT5 group (optional)
+  enabled      Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+  // Deprecated (old HTTP-gateway approach) — kept nullable for back-compat.
+  gatewayUrl   String?
+  gatewayKey   String?
+}

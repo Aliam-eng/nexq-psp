@@ -1,0 +1,6 @@
+Flask>=3.0,<4.0
+# MT5Manager is the official MetaQuotes Manager API Python package (Windows-only,
+# requires the native Manager API libraries from your broker/MetaQuotes).
+# Install it per your broker's instructions, e.g.:
+#   pip install MT5Manager
+# If it is not installed, mt5_gateway.py runs in MOCK mode automatically.

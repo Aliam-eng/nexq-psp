@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nexQ Deposit — Deposit Confirmation Prototypes</title>
+<style>
+  :root {
+    --bg: #03100f;
+    --surface: #0a1413;
+    --raised: #0e1a18;
+    --overlay: #13201e;
+    --line: rgba(255,255,255,.08);
+    --line-strong: rgba(255,255,255,.14);
+    --ink: #f3faf6;
+    --muted: #8ba097;
+    --dim: #5a6b65;
+    --brand: #00c24a;
+    --brand-400: #28d36c;
+    --neon: #39ff14;
+    --gold: #efbc2a;
+    --danger: #e63946;
+    --ink-on-brand: #02140a;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background:
+      radial-gradient(55rem 55rem at 100% -10%, rgba(0,194,74,.10), transparent 60%),
+      radial-gradient(45rem 45rem at -10% 0%, rgba(57,255,20,.05), transparent 55%),
+      var(--bg);
+    background-attachment: fixed;
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 44px 24px 72px; }
+
+  .head { margin-bottom: 36px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--muted);
+    border: 1px solid var(--line); background: rgba(255,255,255,.02);
+    padding: 5px 11px; border-radius: 999px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--neon); box-shadow: 0 0 10px var(--neon); }
+  h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 700; letter-spacing: -.02em; margin: 16px 0 10px; text-wrap: balance; }
+  .lede { color: var(--muted); max-width: 60ch; font-size: 15px; }
+  .lede b { color: var(--ink); font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; margin-top: 30px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    border: 1px solid var(--line); border-radius: 22px;
+    background: linear-gradient(180deg, rgba(255,255,255,.015), transparent 40%);
+    padding: 18px;
+    display: flex; flex-direction: column;
+  }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 2px 4px 16px; }
+  .tag {
+    font-size: 12px; font-weight: 700; letter-spacing: .02em;
+    color: var(--brand-400); border: 1px solid rgba(0,194,74,.3); background: rgba(0,194,74,.1);
+    padding: 3px 9px; border-radius: 8px;
+  }
+  .pname { font-weight: 600; font-size: 14px; }
+  .pdesc { color: var(--dim); font-size: 12.5px; text-align: right; max-width: 22ch; }
+
+  .screen {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 20px;
+    flex: 1;
+    display: flex; flex-direction: column;
+  }
+
+  .mini-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .logo { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; letter-spacing: -.01em; }
+  .logo .mark { width: 22px; height: 22px; border-radius: 7px; background: var(--brand); color: var(--ink-on-brand); display: grid; place-items: center; font-weight: 800; font-size: 12px; }
+  .logo .mut { color: var(--muted); font-weight: 500; }
+  .secure { font-size: 11px; color: var(--dim); display: inline-flex; gap: 6px; align-items: center; }
+
+  .amt { font-variant-numeric: tabular-nums; }
+  .label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+
+  .btn-row { display: flex; gap: 10px; margin-top: 18px; }
+  .btn {
+    appearance: none; border: 0; cursor: pointer; font: inherit; font-weight: 600;
+    border-radius: 12px; padding: 12px 16px; transition: .18s ease; font-size: 14px;
+  }
+  .btn-primary { background: var(--brand); color: var(--ink-on-brand); box-shadow: 0 6px 22px -10px rgba(0,194,74,.65); flex: 1; }
+  .btn-primary:hover { background: var(--brand-400); transform: translateY(-1px); }
+  .btn-ghost { background: var(--raised); color: var(--ink); border: 1px solid var(--line); }
+  .btn-ghost:hover { border-color: var(--line-strong); background: var(--overlay); }
+  .btn:focus-visible { outline: 2px solid var(--brand-400); outline-offset: 2px; }
+
+  .confirm-note { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--brand-400); font-weight: 500; margin-top: 14px; }
+  .confirm-note svg { flex: none; margin-top: 1px; }
+
+  /* A: Minimal */
+  .a-amount { font-size: 42px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 2px; }
+  .a-sub { color: var(--muted); font-size: 13px; }
+  .a-acct {
+    margin-top: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface);
+    padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .a-acct .num { font-family: var(--mono); font-size: 22px; font-weight: 600; letter-spacing: .04em; }
+  .a-lines { margin-top: 14px; display: grid; gap: 8px; font-size: 13px; }
+  .a-lines .r { display: flex; justify-content: space-between; color: var(--muted); }
+  .a-lines .r b { color: var(--ink); font-weight: 600; }
+  .a-total { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
+  .a-total .v { color: var(--brand-400); }
+
+  /* B: Payment card */
+  .card {
+    position: relative; overflow: hidden;
+    border-radius: 18px; padding: 20px;
+    background:
+      radial-gradient(120% 140% at 0% 0%, rgba(57,255,20,.25), transparent 45%),
+      linear-gradient(135deg, #0a7a34, #00401b 85%);
+    border: 1px solid rgba(57,255,20,.2);
+    box-shadow: 0 18px 50px -24px rgba(0,153,55,.6);
+    min-height: 186px; display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .card .sheen { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.08) 50%, transparent 60%); }
+  .card .top { display: flex; justify-content: space-between; align-items: center; position: relative; }
+  .card .brandline { font-weight: 800; letter-spacing: -.01em; }
+  .chip { width: 34px; height: 24px; border-radius: 6px; background: linear-gradient(135deg, #ffe08a, #d4a017); opacity: .9; }
+  .card .acctlabel { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.65); position: relative; }
+  .card .acctnum { font-family: var(--mono); font-size: 27px; font-weight: 600; letter-spacing: .14em; margin-top: 4px; position: relative; }
+  .card .bottom { display: flex; justify-content: space-between; align-items: flex-end; position: relative; }
+  .card .amtlabel { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.65); }
+  .card .amtval { font-size: 24px; font-weight: 700; margin-top: 2px; }
+
+  /* C: Receipt */
+  .receipt { border: 1px dashed var(--line-strong); border-radius: 14px; padding: 18px; background: var(--surface); }
+  .receipt .title { font-weight: 600; font-size: 14px; margin-bottom: 14px; }
+  .ledger { display: grid; gap: 12px; }
+  .lrow { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 10px; }
+  .lrow .k { color: var(--muted); font-size: 13px; }
+  .lrow .leader { border-bottom: 1px dotted var(--line-strong); transform: translateY(-3px); }
+  .lrow .v { font-size: 14px; font-variant-numeric: tabular-nums; }
+  .lrow .v.acct { font-family: var(--mono); font-size: 18px; font-weight: 600; letter-spacing: .03em; }
+  .lrow.total { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 2px; }
+  .lrow.total .k { color: var(--ink); font-weight: 600; font-size: 14px; }
+  .lrow.total .v { font-size: 18px; font-weight: 700; color: var(--brand-400); }
+
+  /* D: Bold hero */
+  .d-wrap { text-align: center; padding: 10px 0 0; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+  .d-amt { font-size: 60px; font-weight: 800; letter-spacing: -.03em; line-height: 1; }
+  .d-amt .c { font-size: 22px; color: var(--muted); font-weight: 600; vertical-align: super; margin-left: 2px; }
+  .d-to { color: var(--muted); font-size: 13px; margin-top: 16px; }
+  .d-acct {
+    font-family: var(--mono); font-size: 30px; font-weight: 600; letter-spacing: .06em;
+    margin-top: 6px;
+    display: inline-block; padding: 8px 18px; border-radius: 12px;
+    border: 1px solid rgba(0,194,74,.25); background: rgba(0,194,74,.08); color: var(--ink);
+  }
+
+  .foot { margin-top: 34px; color: var(--dim); font-size: 13px; border-top: 1px solid var(--line); padding-top: 18px; }
+  .foot b { color: var(--muted); font-weight: 600; }
+  @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <span class="eyebrow"><span class="dot"></span> Deposit flow · confirmation step</span>
+    <h1>Pick a confirmation style</h1>
+    <p class="lede">This is the screen shown <b>after</b> the client enters their MT5 account and amount and taps Continue — one last look before paying on Whish. Each option shows the <b>account big</b> and the <b>amount</b>, styled differently. Tell me <b>A, B, C, or D</b> (or mix ideas) and I'll wire it into the deposit form.</p>
+  </header>
+
+  <div class="grid">
+
+    <!-- A -->
+    <section class="panel">
+      <div class="panel-head">
+        <div><span class="tag">A</span> &nbsp;<span class="pname">Minimal</span></div>
+        <div class="pdesc">Clean &amp; calm — amount first, account highlighted, line-item total.</div>
+      </div>
+      <div class="screen">
+        <div class="mini-head">
+          <span class="logo"><span class="mark">G</span> Giv<span class="mut">Trade</span></span>
+          <span class="secure">🔒 Whish Pay</span>
+        </div>
+        <div class="label">You're depositing</div>
+        <div class="a-amount amt">$250.00</div>
+        <div class="a-sub">Credited to your MT5 account</div>
+        <div class="a-acct">
+          <span class="label">MT5 account</span>
+          <span class="num">210553</span>
+        </div>
+        <div class="a-lines">
+          <div class="r"><span>Amount</span><b class="amt">$250.00</b></div>
+          <div class="r"><span>Fee</span><b class="amt">$0.00</b></div>
+          <div class="r a-total"><span>Total to pay</span><b class="amt v">$250.00</b></div>
+        </div>
+        <div class="confirm-note">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+          Double-check the account number before paying.
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost">Edit</button>
+          <button class="btn btn-primary">Confirm &amp; pay</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- B -->
+    <section class="panel">
+      <div class="panel-head">
+        <div><span class="tag">B</span> &nbsp;<span class="pname">Account card</span></div>
+        <div class="pdesc">Premium — the account rendered like a card you can't misread.</div>
+      </div>
+      <div class="screen">
+        <div class="mini-head">
+          <span class="logo"><span class="mark">G</span> Giv<span class="mut">Trade</span></span>
+          <span class="secure">🔒 Whish Pay</span>
+        </div>
+        <div class="card">
+          <div class="sheen"></div>
+          <div class="top">
+            <span class="brandline">nexQ Deposit</span>
+            <span class="chip"></span>
+          </div>
+          <div>
+            <div class="acctlabel">MT5 account</div>
+            <div class="acctnum">210553</div>
+          </div>
+          <div class="bottom">
+            <div>
+              <div class="amtlabel">Depositing</div>
+              <div class="amtval amt">$250.00</div>
+            </div>
+            <div style="text-align:right">
+              <div class="amtlabel">Fee</div>
+              <div class="amtval amt" style="font-size:16px">$0.00</div>
+            </div>
+          </div>
+        </div>
+        <div class="confirm-note" style="justify-content:center">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+          Is this your account? You'll pay $250.00 on Whish.
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost">Edit</button>
+          <button class="btn btn-primary">Confirm &amp; pay</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- C -->
+    <section class="panel">
+      <div class="panel-head">
+        <div><span class="tag">C</span> &nbsp;<span class="pname">Receipt</span></div>
+        <div class="pdesc">Transactional &amp; trustworthy — an itemized ledger.</div>
+      </div>
+      <div class="screen">
+        <div class="mini-head">
+          <span class="logo"><span class="mark">G</span> Giv<span class="mut">Trade</span></span>
+          <span class="secure">🔒 Whish Pay</span>
+        </div>
+        <div class="receipt">
+          <div class="title">Review your deposit</div>
+          <div class="ledger">
+            <div class="lrow"><span class="k">MT5 account</span><span class="leader"></span><span class="v acct">210553</span></div>
+            <div class="lrow"><span class="k">Amount</span><span class="leader"></span><span class="v">$250.00</span></div>
+            <div class="lrow"><span class="k">Fee</span><span class="leader"></span><span class="v">$0.00</span></div>
+            <div class="lrow total"><span class="k">Total to pay</span><span class="leader"></span><span class="v">$250.00</span></div>
+          </div>
+        </div>
+        <div class="confirm-note">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+          Funds go to account <strong style="color:var(--ink);margin-left:3px">210553</strong>. Make sure it's correct.
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost">Edit</button>
+          <button class="btn btn-primary">Confirm &amp; pay</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- D -->
+    <section class="panel">
+      <div class="panel-head">
+        <div><span class="tag">D</span> &nbsp;<span class="pname">Bold amount</span></div>
+        <div class="pdesc">Impactful — amount dominant, account unmissable beneath it.</div>
+      </div>
+      <div class="screen">
+        <div class="mini-head">
+          <span class="logo"><span class="mark">G</span> Giv<span class="mut">Trade</span></span>
+          <span class="secure">🔒 Whish Pay</span>
+        </div>
+        <div class="d-wrap">
+          <div class="label" style="text-align:center;margin-bottom:10px">You'll pay</div>
+          <div class="d-amt amt">$250<span class="c">.00 USD</span></div>
+          <div class="d-to">to MT5 account</div>
+          <div class="d-acct">210553</div>
+          <div class="confirm-note" style="justify-content:center">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+            Fee $0.00 · check the account number
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost">Edit</button>
+          <button class="btn btn-primary">Confirm &amp; pay</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <p class="foot">All four pull live from the form (account, amount, fee, total) and sit between <b>Continue</b> and the Whish redirect. Dark theme only — it matches the nexQ Deposit product. In the real app the type is <b>Plus Jakarta Sans</b>. Reply with your pick and I'll build it into the deposit page.</p>
+</div>
+</body>
+</html>

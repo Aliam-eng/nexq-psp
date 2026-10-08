@@ -1,0 +1,71 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: nexq-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: nexq_deposit
+    volumes:
+      - nexq_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexq -d nexq_deposit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    container_name: nexq-web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      CRON_SECRET: ${CRON_SECRET}
+      APP_BASE_URL: ${APP_BASE_URL}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      RUN_SEED: ${RUN_SEED}
+    expose:
+      - "3000" # internal only; Caddy terminates TLS and proxies to it
+
+  # Background reconciler: pings /api/sweep on an interval so payments where the
+  # customer paid but never returned still get completed (credited exactly once).
+  cron:
+    image: curlimages/curl:latest
+    container_name: nexq-cron
+    restart: unless-stopped
+    depends_on:
+      - web
+    environment:
+      CRON_SECRET: ${CRON_SECRET}
+      SWEEP_INTERVAL: ${SWEEP_INTERVAL:-300}
+    entrypoint: ["sh", "-c"]
+    command:
+      - 'while true; do curl -fsS -m 30 -X POST -H "x-cron-secret: $$CRON_SECRET" http://web:3000/api/sweep >/dev/null 2>&1 || true; sleep "$${SWEEP_INTERVAL:-300}"; done'
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: nexq-caddy
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  nexq_pgdata:
+  caddy_data:
+  caddy_config:

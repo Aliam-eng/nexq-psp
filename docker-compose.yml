@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: nexq-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexq
+      POSTGRES_PASSWORD: nexq
+      POSTGRES_DB: nexq_deposit
+    # The web service reaches the DB over the internal network (db:5432).
+    # Uncomment to also expose it on the host (pick a free port to avoid clashes):
+    # ports:
+    #   - "5544:5432"
+    volumes:
+      - nexq_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexq -d nexq_deposit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    container_name: nexq-web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://nexq:nexq@db:5432/nexq_deposit?schema=public"
+      # CHANGE THESE before any real deployment:
+      AUTH_SECRET: "${AUTH_SECRET:-please-change-me-to-a-long-random-string}"
+      APP_BASE_URL: "${APP_BASE_URL:-http://localhost:3000}"
+      # Initial admin (created on first boot when RUN_SEED=true). Admin can change
+      # the password later from inside the app (Settings → Account).
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@nexq.local}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-changeme}"
+      RUN_SEED: "true"
+    ports:
+      - "3000:3000"
+
+volumes:
+  nexq_pgdata:
