@@ -1,8 +1,8 @@
 import type { Config } from "tailwindcss";
 
-// Design tokens distilled from nexqcapital.com: graphite canvas built off the
-// site's #393C41 charcoal, nexQ cyan (#00ABD7) -> magenta (#CE3D95) gradient
-// from the Q mark, Montserrat, soft cyan glow.
+// Design tokens distilled from nexqcapital.com: light canvas, the site's #393C41
+// charcoal for header/hero bands, nexQ cyan (#00ABD7) -> magenta (#CE3D95) gradient
+// from the Q mark, Montserrat. Deliberately light — nothing like the old dark portal.
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
@@ -11,33 +11,36 @@ const config: Config = {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
-        bg: "#16171a",
-        charcoal: "#393c41", // nexqcapital.com header
+        bg: "#f3f4f6",
+        charcoal: {
+          DEFAULT: "#393c41", // nexqcapital.com header
+          deep: "#2b2e32",
+        },
         surface: {
-          DEFAULT: "#1e2023",
-          raised: "#25272b",
-          overlay: "#2e3135",
+          DEFAULT: "#ffffff",
+          raised: "#f8f9fb",
+          overlay: "#eef0f3",
         },
         line: {
-          DEFAULT: "#33363b",
-          strong: "#45494f",
+          DEFAULT: "#e2e5ea",
+          strong: "#cdd2d9",
         },
         ink: {
-          DEFAULT: "#f5f5f5",
-          muted: "#a4a8af",
-          dim: "#6f747b",
+          DEFAULT: "#1d2024",
+          muted: "#565c64",
+          dim: "#8a9099",
         },
         brand: {
           DEFAULT: "#00abd7",
-          600: "#008fb5",
+          600: "#0089ad",
           500: "#00abd7",
-          400: "#3cc3e6",
+          400: "#00799b", // text-safe cyan on white (AA)
           magenta: "#ce3d95",
           ink: "#ffffff",
         },
-        success: "#2fc77a",
-        gold: "#efbc2a",
-        danger: "#e63946",
+        success: "#15803d",
+        gold: "#a16207",
+        danger: "#c81e3a",
       },
       borderRadius: {
         lg: "0.75rem",
@@ -46,10 +49,10 @@ const config: Config = {
         "3xl": "1.75rem",
       },
       boxShadow: {
-        glow: "0 0 0 1px rgba(0,171,215,0.10), 0 18px 50px -22px rgba(0,171,215,0.40)",
-        "glow-sm": "0 6px 22px -10px rgba(206,61,149,0.55)",
-        card: "0 1px 0 0 rgba(255,255,255,0.03) inset, 0 24px 50px -30px rgba(0,0,0,0.85)",
-        focus: "0 0 0 3px rgba(0,171,215,0.25)",
+        glow: "0 12px 32px -14px rgba(0,137,173,0.35)",
+        "glow-sm": "0 8px 20px -10px rgba(206,61,149,0.45)",
+        card: "0 1px 2px rgba(16,24,40,0.05), 0 12px 32px -16px rgba(16,24,40,0.14)",
+        focus: "0 0 0 4px rgba(0,171,215,0.18)",
       },
       keyframes: {
         "fade-up": {

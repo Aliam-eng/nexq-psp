@@ -5,8 +5,8 @@
 #   ./deploy.sh <domain> --behind-proxy [--port=N] # app only on 127.0.0.1:N, use your own proxy
 #
 # Examples:
-#   ./deploy.sh portal.giv.trade ops@giv.trade
-#   ./deploy.sh portal.giv.trade --behind-proxy --port=8090
+#   ./deploy.sh deposit.nexqcapital.com admin@nexqcapital.com
+#   ./deploy.sh deposit.nexqcapital.com --behind-proxy --port=8090
 #
 # Secrets are generated on first run and preserved on re-deploys.
 set -euo pipefail
@@ -52,6 +52,12 @@ CRON_SECRET="$(get_var CRON_SECRET)";             [ -z "$CRON_SECRET" ] && CRON_
 POSTGRES_PASSWORD="$(get_var POSTGRES_PASSWORD)"; [ -z "$POSTGRES_PASSWORD" ] && POSTGRES_PASSWORD="$(gen 16)"
 ADMIN_EMAIL="$(get_var ADMIN_EMAIL)";             [ -z "$ADMIN_EMAIL" ] && ADMIN_EMAIL="admin@${DOMAIN}"
 ADMIN_PASSWORD="$(get_var ADMIN_PASSWORD)";       NEW_ADMIN=0
+# Whish Pay credentials are preserved across re-deploys (add them to .env once).
+WHISH_BASE_URL="$(get_var WHISH_BASE_URL)"
+WHISH_CHANNEL="$(get_var WHISH_CHANNEL)"
+WHISH_SECRET="$(get_var WHISH_SECRET)"
+WHISH_WEBSITE_URL="$(get_var WHISH_WEBSITE_URL)"
+WHISH_USER_AGENT="$(get_var WHISH_USER_AGENT)"
 if [ -z "$ADMIN_PASSWORD" ]; then ADMIN_PASSWORD="$(gen 9)"; NEW_ADMIN=1; fi
 
 cat > "$ENV_FILE" <<EOF
@@ -68,6 +74,11 @@ ADMIN_EMAIL=$ADMIN_EMAIL
 ADMIN_PASSWORD=$ADMIN_PASSWORD
 RUN_SEED=true
 WEB_PORT=$WEB_PORT
+WHISH_BASE_URL="$WHISH_BASE_URL"
+WHISH_CHANNEL="$WHISH_CHANNEL"
+WHISH_SECRET="$WHISH_SECRET"
+WHISH_WEBSITE_URL="$WHISH_WEBSITE_URL"
+WHISH_USER_AGENT="$WHISH_USER_AGENT"
 EOF
 
 if [ "$MODE" = "proxied" ]; then
@@ -127,7 +138,7 @@ cat <<EOF
 
 Also:
   - In MT5 Administrator, whitelist THIS server's public IP for the WebAPI manager.
-  - Admin -> Settings: set Rival key, MT5 WebAPI host/login/password, min deposit, webhook.
+  - Admin -> Settings: set Whish Pay channel/secret/websiteUrl/User-Agent, MT5 WebAPI host/login/password, min deposit.
 
 Logs:   docker compose -f $COMPOSE logs -f
 Stop:   docker compose -f $COMPOSE down

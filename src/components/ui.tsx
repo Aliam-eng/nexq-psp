@@ -3,32 +3,34 @@ import { LogoutButton } from "./LogoutButton";
 import { AdminNav } from "./AdminNav";
 
 // --- Brand mark ----------------------------------------------------------
-export function Logo({ href = "/deposit" }: { href?: string }) {
+// "onDark" = white wordmark for charcoal bands; "onLight" = charcoal wordmark for light pages.
+export function Logo({ href = "/deposit", tone = "onDark" }: { href?: string; tone?: "onDark" | "onLight" }) {
   return (
     <Link href={href} className="inline-flex items-center">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logo-nexq.png" alt="nexQ Deposit" className="h-7 w-auto select-none" />
+      <img
+        src={tone === "onDark" ? "/logo-nexq.png" : "/logo-nexq-dark.png"}
+        alt="nexQ"
+        className="h-7 w-auto select-none"
+      />
     </Link>
   );
 }
 
 // --- Status badge --------------------------------------------------------
-const STATUS: Record<string, { label: string; dot: string; cls: string }> = {
-  PENDING: { label: "Pending", dot: "bg-ink-muted", cls: "text-ink-muted border-line bg-surface-raised/50" },
-  LINK_GENERATED: { label: "Awaiting payment", dot: "bg-gold", cls: "text-gold border-gold/25 bg-gold/10" },
-  PAID: { label: "Paid · crediting", dot: "bg-brand", cls: "text-brand-400 border-brand/30 bg-brand/10" },
-  CREDITED: { label: "Completed", dot: "bg-success", cls: "text-success border-success/30 bg-success/10" },
-  CREDIT_FAILED: { label: "Paid · MT5 failed", dot: "bg-orange-400", cls: "text-orange-300 border-orange-400/25 bg-orange-400/10" },
-  FAILED: { label: "Failed", dot: "bg-danger", cls: "text-danger border-danger/25 bg-danger/10" },
+const STATUS: Record<string, { label: string; cls: string }> = {
+  PENDING: { label: "Pending", cls: "bg-surface-overlay text-ink-muted" },
+  LINK_GENERATED: { label: "Awaiting payment", cls: "bg-amber-100 text-amber-800" },
+  PAID: { label: "Paid · crediting", cls: "bg-sky-100 text-sky-800" },
+  CREDITED: { label: "Completed", cls: "bg-emerald-100 text-emerald-800" },
+  CREDIT_FAILED: { label: "Paid · MT5 failed", cls: "bg-orange-100 text-orange-800" },
+  FAILED: { label: "Failed", cls: "bg-rose-100 text-rose-800" },
 };
 
 export function StatusBadge({ status }: { status: string }) {
   const s = STATUS[status] ?? STATUS.PENDING;
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${s.cls}`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${s.dot} ${status === "PENDING" || status === "FAILED" ? "" : "animate-pulse-soft"}`} />
+    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${s.cls}`}>
       {s.label}
     </span>
   );
@@ -42,20 +44,20 @@ export function TopBar({ user }: { user: { email: string; role: string } }) {
         <div className="flex items-center gap-5">
           <div className="flex items-center gap-2.5">
             <Logo href="/admin/transactions" />
-            <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+            <span className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/70">
               Back office
             </span>
           </div>
           <AdminNav />
         </div>
         <div className="flex items-center gap-2 text-sm">
-          <span className="hidden items-center gap-2 text-ink-muted sm:flex">
+          <span className="hidden items-center gap-2 text-white/70 sm:flex">
             <span className="bg-brand-gradient grid h-7 w-7 place-items-center rounded-full text-xs font-bold uppercase text-white">
               {user.email.charAt(0)}
             </span>
             {user.email}
           </span>
-          <LogoutButton />
+          <LogoutButton onDark />
         </div>
       </div>
       <div className="bg-brand-gradient h-0.5" />

@@ -36,6 +36,11 @@ services:
       ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@nexq.local}"
       ADMIN_PASSWORD: "${ADMIN_PASSWORD:-changeme}"
       RUN_SEED: "true"
+      WHISH_BASE_URL: ${WHISH_BASE_URL:-}
+      WHISH_CHANNEL: ${WHISH_CHANNEL:-}
+      WHISH_SECRET: ${WHISH_SECRET:-}
+      WHISH_WEBSITE_URL: ${WHISH_WEBSITE_URL:-}
+      WHISH_USER_AGENT: ${WHISH_USER_AGENT:-}
     ports:
       - "3000:3000"
 

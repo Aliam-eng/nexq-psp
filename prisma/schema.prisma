@@ -60,11 +60,11 @@ model Transaction {
   currency        String         @default("USD")
   status          String         @default("PENDING")
 
-  // Our reference sent to Rival so we can correlate the payment
+  // Human-facing reference shown to the client (NEXQ-XXXXXXXX)
   reference       String         @unique
 
-  // Rival / WhishPay
-  rivalPaymentId  String?
+  // Whish Pay: the externalId we send on create (and query status with)
+  whishExternalId String?        @unique
   whishpayUrl     String?
 
   // MT5 result
@@ -84,17 +84,17 @@ model Transaction {
 
 // Singleton-style config rows edited from the Technical dashboard.
 
+// Direct Whish Pay credentials (issued by Whish), sent as request headers.
 model ProviderConfig {
-  id                String   @id @default("rival")
-  apiKey            String?  // Rival company key: tsk_<prefix>_<secret> (sent as Bearer)
-  baseUrl           String?  @default("https://staging.portal.rivalpayments.com/v1")
-  createPaymentPath String?  @default("/integrations/whish/payments")
-  statusPath        String?  @default("/integrations/whish/payments/{id}")
-  healthPath        String?  @default("/health")
-  minDeposit        Float    @default(0) // minimum allowed deposit amount
-  webhookSecret     String?  // shared secret to verify incoming Rival webhooks
-  enabled           Boolean  @default(false)
-  updatedAt         DateTime @updatedAt
+  id         String   @id @default("whish")
+  baseUrl    String?  @default("https://partner.api.sbx.whish.money/itel-service/api") // sandbox; production: https://api.whish.money/itel-service/api
+  channel    String?  // "channel" header
+  secret     String?  // "secret" header — store-at-rest only; encrypt before production use
+  websiteUrl String?  // "websiteUrl" header
+  userAgent  String?  // "User-Agent" header, exactly as issued by Whish
+  minDeposit Float    @default(0) // minimum allowed deposit amount
+  enabled    Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
 }
 
 model Mt5Config {

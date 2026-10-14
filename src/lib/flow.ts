@@ -1,53 +1,64 @@
 import { prisma } from "./db";
-import { getPayment } from "./rival";
+import { getCollectStatus, WhishError, WhishPendingError } from "./whish";
 import { mt5Deposit } from "./mt5";
 import type { Transaction } from "@prisma/client";
 
-// Reconcile one transaction with Rival, then credit MT5 if newly PAID.
-// Idempotent: safe to call repeatedly (on customer return + background sweep).
+// Reconcile one transaction with Whish Pay, then credit MT5 if newly paid.
+// Idempotent: safe to call repeatedly (Whish callback, customer return page, background sweep).
 export async function reconcileTransaction(txId: string): Promise<Transaction | null> {
   const tx = await prisma.transaction.findUnique({ where: { id: txId } });
   if (!tx) return null;
 
   // Terminal states — nothing to do.
   if (tx.status === "CREDITED" || tx.status === "FAILED") return tx;
-  if (!tx.rivalPaymentId) return tx; // no link yet
+  if (!tx.whishExternalId) return tx; // no link yet
 
-  // 1) Pull latest status from Rival.
-  let rival;
+  // 1) Pull the authoritative status from Whish (callbacks are unauthenticated, so never trust them alone).
+  let whish;
   try {
-    rival = await getPayment(tx.rivalPaymentId);
+    whish = await getCollectStatus(tx.whishExternalId, tx.currency);
   } catch (e: any) {
+    // A pending envelope or an API error tells us nothing about the payment — keep waiting.
+    const detail =
+      e instanceof WhishPendingError
+        ? "status check pending at Whish — will retry"
+        : `status check failed: ${e instanceof WhishError ? `${e.code}: ${e.message}` : e?.message || e}`;
+    return prisma.transaction.update({ where: { id: tx.id }, data: { errorMessage: detail } });
+  }
+  const payload = JSON.stringify(whish);
+
+  // failed = link expired unpaid; refunded = paid then refunded before we credited it.
+  if (whish.collectStatus === "failed" || whish.collectStatus === "refunded") {
+    if (tx.status === "LINK_GENERATED" || tx.status === "PENDING") {
+      return prisma.transaction.update({
+        where: { id: tx.id },
+        data: {
+          status: "FAILED",
+          providerPayload: payload,
+          errorMessage: whish.collectStatus === "failed" ? "payment link expired unpaid" : "payment refunded",
+        },
+      });
+    }
+    // Already PAID / CREDIT_FAILED: don't silently drop a paid deposit — flag it for an admin.
     return prisma.transaction.update({
       where: { id: tx.id },
-      data: { errorMessage: `status check failed: ${e?.message || e}` },
+      data: { providerPayload: payload, errorMessage: `Whish now reports "${whish.collectStatus}" — check manually` },
     });
   }
 
-  if (rival.status === "FAILED" || rival.status === "EXPIRED") {
+  if (whish.collectStatus !== "success") {
+    // pending (still payable, even after a failed attempt) or unknown — keep waiting.
     return prisma.transaction.update({
       where: { id: tx.id },
-      data: {
-        status: "FAILED",
-        providerPayload: JSON.stringify(rival),
-        errorMessage: `payment ${rival.status.toLowerCase()}`,
-      },
+      data: { providerPayload: payload, errorMessage: null },
     });
   }
 
-  if (rival.status !== "PAID") {
-    // Still PENDING — record payload, keep waiting.
-    return prisma.transaction.update({
-      where: { id: tx.id },
-      data: { providerPayload: JSON.stringify(rival) },
-    });
-  }
-
-  // 2) PAID. Mark PAID (if not already) then attempt MT5 credit.
+  // 2) Paid. Mark PAID (if not already) then attempt MT5 credit.
   if (tx.status !== "PAID" && tx.status !== "CREDIT_FAILED") {
     await prisma.transaction.update({
       where: { id: tx.id },
-      data: { status: "PAID", providerPayload: JSON.stringify(rival) },
+      data: { status: "PAID", providerPayload: payload, errorMessage: null },
     });
   }
 
@@ -107,14 +118,14 @@ export async function reconcileTransaction(txId: string): Promise<Transaction | 
 //   • CREDIT_FAILED      — a paid deposit whose MT5 credit failed; these need a
 //                          look (e.g. wrong account) rather than silent retries,
 //                          so leave them to the admin "Sync" button.
-// Only recent ones, so we don't keep polling Rival for ancient abandoned links.
+// Only recent ones, so we don't keep polling Whish for ancient abandoned links.
 // Errors are isolated per transaction — one bad row never breaks the whole run.
 export async function sweepPending(limit = 100, maxAgeDays = 14) {
   const cutoff = new Date(Date.now() - maxAgeDays * 24 * 3600 * 1000);
   const pend = await prisma.transaction.findMany({
     where: {
       status: { in: ["LINK_GENERATED", "PAID"] },
-      rivalPaymentId: { not: null },
+      whishExternalId: { not: null },
       createdAt: { gte: cutoff },
     },
     orderBy: { createdAt: "asc" },

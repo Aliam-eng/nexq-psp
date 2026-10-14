@@ -4,8 +4,8 @@
 #   ./upload.sh <user@server> <domain> [acme-email] [remote-path]
 #
 # Examples:
-#   ./upload.sh root@1.2.3.4 portal.giv.trade ops@giv.trade
-#   DEPLOY_ARGS="--behind-proxy --port=8090" ./upload.sh root@1.2.3.4 portal.giv.trade
+#   ./upload.sh root@1.2.3.4 deposit.nexqcapital.com admin@nexqcapital.com
+#   DEPLOY_ARGS="--behind-proxy --port=8090" ./upload.sh root@1.2.3.4 deposit.nexqcapital.com
 #
 # Uses tar over SSH (works from Windows Git Bash — no rsync required).
 # Skips node_modules/.next/.git/.env/dev.db, so the server's own .env (secrets,
@@ -21,7 +21,7 @@ DEPLOY_ARGS="${DEPLOY_ARGS:-}"
 
 if [ -z "$SERVER" ] || [ -z "$DOMAIN" ]; then
   echo "Usage: ./upload.sh <user@server> <domain> [acme-email] [remote-path]"
-  echo "Example: ./upload.sh root@1.2.3.4 portal.giv.trade ops@giv.trade"
+  echo "Example: ./upload.sh root@1.2.3.4 deposit.nexqcapital.com admin@nexqcapital.com"
   exit 1
 fi
 [ -z "$EMAIL" ] && EMAIL="admin@$DOMAIN"

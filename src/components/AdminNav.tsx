@@ -21,7 +21,7 @@ export function AdminNav() {
             key={l.href}
             href={l.href}
             className={`rounded-full px-3.5 py-1.5 font-medium transition ${
-              active ? "bg-white/10 text-ink" : "text-ink-muted hover:bg-white/5 hover:text-ink"
+              active ? "bg-white/15 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
             }`}
           >
             {l.label}

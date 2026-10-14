@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db";
-import { createPayment, RivalError } from "@/lib/rival";
+import { createPayment, WhishError, WhishPendingError } from "@/lib/whish";
 import { computeFee, computeTotal } from "@/lib/fees";
 
 // Public (no-login) deposit creation. The client enters their MT5 account
-// number and amount; we create a Whish Pay link and return it.
+// number and amount; we create a Whish Pay link (direct Whish API) and return it.
 const schema = z.object({
   mt5Login: z.string().trim().min(1).max(32).regex(/^[0-9]+$/, "MT5 account must be numeric"),
   amount: z.coerce.number().positive().max(1_000_000),
@@ -26,9 +26,11 @@ export async function POST(req: Request) {
   const { mt5Login, amount, currency, email, name } = parsed.data;
 
   // Enforce the admin-configured minimum deposit server-side.
-  const cfg = await prisma.providerConfig.findUnique({ where: { id: "rival" }, select: { minDeposit: true } });
-  const minDeposit = cfg?.minDeposit ?? 0;
-  if (minDeposit > 0 && amount < minDeposit) {
+  const cfg = await prisma.providerConfig.findUnique({ where: { id: "whish" }, select: { minDeposit: true } });
+  // Whish's own floor: 1.00 USD / 1000 LBP.
+  const whishMin = currency.toUpperCase() === "LBP" ? 1000 : 1;
+  const minDeposit = Math.max(cfg?.minDeposit ?? 0, whishMin);
+  if (amount < minDeposit) {
     return NextResponse.json(
       { error: `Minimum deposit is ${minDeposit.toFixed(2)} ${currency.toUpperCase()}` },
       { status: 400 }
@@ -40,9 +42,10 @@ export async function POST(req: Request) {
   const total = computeTotal(amount);
 
   const reference = `NEXQ-${randomUUID().slice(0, 8).toUpperCase()}`;
-  const base = process.env.APP_BASE_URL || "http://localhost:3000";
+  const externalId = randomUUID(); // Whish transaction reference — unique per payment
+  const base = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
 
-  // Always record the transaction first for audit.
+  // Always record the transaction (with its externalId) first, so any outcome can be reconciled.
   const tx = await prisma.transaction.create({
     data: {
       mt5Login,
@@ -52,25 +55,40 @@ export async function POST(req: Request) {
       fee,
       currency: currency.toUpperCase(),
       reference,
+      whishExternalId: externalId,
       status: "PENDING",
     },
   });
 
+  // Whish adds no identifiers to callbacks, so we carry our own externalId in the URL.
+  const callback = (result: "success" | "failure") =>
+    `${base}/api/webhooks/whish?externalId=${externalId}&result=${result}`;
+  const returnUrl = `${base}/deposit/return?tx=${tx.id}`;
+  const request = {
+    amount: total, // client pays deposit + fee
+    currency: currency.toUpperCase(),
+    invoice: `${reference} - MT5 ${mt5Login}`,
+    externalId,
+    successCallbackUrl: callback("success"),
+    failureCallbackUrl: callback("failure"),
+    successRedirectUrl: returnUrl,
+    failureRedirectUrl: returnUrl,
+  };
+
   try {
-    const payment = await createPayment({
-      amount: total, // client pays deposit + fee
-      currency: currency.toUpperCase(),
-      invoice: `${reference} • MT5 ${mt5Login}`,
-      idempotencyKey: reference,
-      successRedirectUrl: `${base}/deposit/return?tx=${tx.id}`,
-      failureRedirectUrl: `${base}/deposit/return?tx=${tx.id}`,
-    });
+    let payment;
+    try {
+      payment = await createPayment(request);
+    } catch (e) {
+      // Outcome unknown: re-sending the same externalId is safe (Whish replays, never double-executes).
+      if (!(e instanceof WhishPendingError)) throw e;
+      payment = await createPayment(request);
+    }
 
     const updated = await prisma.transaction.update({
       where: { id: tx.id },
       data: {
         status: "LINK_GENERATED",
-        rivalPaymentId: payment.externalId,
         whishpayUrl: payment.collectUrl,
         providerPayload: JSON.stringify(payment),
       },
@@ -85,14 +103,14 @@ export async function POST(req: Request) {
   } catch (e: any) {
     // Store the detailed reason for admins, but don't leak provider internals
     // (keys, config state) to anonymous callers on this public endpoint.
-    const detail = e instanceof RivalError ? `${e.code}: ${e.message}` : e?.message || "Payment creation failed";
+    const detail = e instanceof WhishError ? `${e.code}: ${e.message}` : e?.message || "Payment creation failed";
     await prisma.transaction.update({
       where: { id: tx.id },
       data: { status: "FAILED", errorMessage: detail },
     });
     const clientMessage =
-      e instanceof RivalError && (e.code === "VALIDATION_ERROR" || e.code === "NO_COMMISSION_RULE")
-        ? e.message // safe, user-actionable (e.g. amount issues)
+      e instanceof WhishError && (e.code === "fail" || e.code === "currency.not_supported")
+        ? e.message // safe, user-actionable (amount / currency issues)
         : "Payment service is temporarily unavailable. Please try again later.";
     return NextResponse.json({ error: clientMessage }, { status: 502 });
   }

@@ -4,13 +4,12 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 const schema = z.object({
-  apiKey: z.string().optional().nullable(),
   baseUrl: z.string().url().optional().nullable(),
-  createPaymentPath: z.string().optional().nullable(),
-  statusPath: z.string().optional().nullable(),
-  healthPath: z.string().optional().nullable(),
+  channel: z.string().trim().optional().nullable(),
+  secret: z.string().optional().nullable(),
+  websiteUrl: z.string().trim().optional().nullable(),
+  userAgent: z.string().trim().optional().nullable(),
   minDeposit: z.coerce.number().min(0).max(1_000_000).optional(),
-  webhookSecret: z.string().optional().nullable(),
   enabled: z.boolean().optional(),
 });
 
@@ -23,28 +22,26 @@ export async function PUT(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
   const d = parsed.data;
-  // Empty string apiKey means "leave unchanged" so we never wipe a saved key by accident.
   const data: Record<string, unknown> = {
     baseUrl: d.baseUrl ?? undefined,
-    createPaymentPath: d.createPaymentPath ?? undefined,
-    statusPath: d.statusPath ?? undefined,
-    healthPath: d.healthPath ?? undefined,
+    channel: d.channel ?? undefined,
+    websiteUrl: d.websiteUrl ?? undefined,
+    userAgent: d.userAgent ?? undefined,
     minDeposit: d.minDeposit ?? undefined,
     enabled: d.enabled ?? undefined,
   };
-  if (d.apiKey) data.apiKey = d.apiKey;
-  if (d.webhookSecret) data.webhookSecret = d.webhookSecret;
+  // Empty secret means "leave unchanged" so we never wipe a saved secret by accident.
+  if (d.secret) data.secret = d.secret;
 
   const cfg = await prisma.providerConfig.upsert({
-    where: { id: "rival" },
+    where: { id: "whish" },
     update: data,
-    create: { id: "rival", ...data, apiKey: d.apiKey ?? null },
+    create: { id: "whish", ...data },
   });
 
   return NextResponse.json({
     ok: true,
-    hasKey: !!cfg.apiKey,
-    hasWebhookSecret: !!cfg.webhookSecret,
+    hasSecret: !!cfg.secret,
     enabled: cfg.enabled,
     minDeposit: cfg.minDeposit,
   });

@@ -2,17 +2,24 @@
 
 import { useState } from "react";
 
-type RivalCfg = {
+type WhishCfg = {
   baseUrl: string;
-  createPaymentPath: string;
-  statusPath: string;
-  healthPath: string;
+  channel: string;
+  websiteUrl: string;
+  userAgent: string;
   minDeposit: number;
   enabled: boolean;
-  hasKey: boolean;
-  hasWebhookSecret: boolean;
-  webhookUrl: string;
+  hasSecret: boolean;
+  callbackUrl: string;
+  envFields: ("baseUrl" | "channel" | "secret" | "websiteUrl" | "userAgent")[]; // pinned by server .env
 };
+
+const ENV_HINT = "Set on the server (.env) — edit it there";
+
+const WHISH_ENVIRONMENTS = [
+  { label: "Sandbox", url: "https://partner.api.sbx.whish.money/itel-service/api" },
+  { label: "Production", url: "https://api.whish.money/itel-service/api" },
+];
 type Mt5Cfg = {
   mt5Server: string;
   mt5Login: string;
@@ -54,10 +61,10 @@ function TestResult({ text }: { text: string | null }) {
   return <span className={`text-sm ${ok ? "text-brand-400" : "text-ink-muted"}`}>{text}</span>;
 }
 
-export function SettingsForms({ rival, mt5 }: { rival: RivalCfg; mt5: Mt5Cfg }) {
+export function SettingsForms({ whish, mt5 }: { whish: WhishCfg; mt5: Mt5Cfg }) {
   return (
     <div className="space-y-6">
-      <RivalForm cfg={rival} />
+      <WhishForm cfg={whish} />
       <Mt5Form cfg={mt5} />
     </div>
   );
@@ -78,69 +85,85 @@ function SectionHeader({ title, desc, on, onToggle }: { title: string; desc: str
   );
 }
 
-function RivalForm({ cfg }: { cfg: RivalCfg }) {
-  const [form, setForm] = useState({ ...cfg, apiKey: "", webhookSecret: "" });
+function WhishForm({ cfg }: { cfg: WhishCfg }) {
+  const [form, setForm] = useState({ ...cfg, secret: "" });
   const [copied, setCopied] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [test, setTest] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const preset = WHISH_ENVIRONMENTS.find((e) => e.url === form.baseUrl);
+  const pinned = (f: WhishCfg["envFields"][number]) => cfg.envFields.includes(f);
+  // Only send fields this form actually controls; env-pinned ones are ignored server-side anyway.
+  const editable = (f: WhishCfg["envFields"][number], v: string) => (pinned(f) ? undefined : v || undefined);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setMsg(null);
-    const res = await fetch("/api/config/rival", {
+    const res = await fetch("/api/config/whish", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        apiKey: form.apiKey || undefined,
-        baseUrl: form.baseUrl || undefined,
-        createPaymentPath: form.createPaymentPath || undefined,
-        statusPath: form.statusPath || undefined,
-        healthPath: form.healthPath || undefined,
+        baseUrl: editable("baseUrl", form.baseUrl),
+        channel: editable("channel", form.channel),
+        secret: editable("secret", form.secret),
+        websiteUrl: editable("websiteUrl", form.websiteUrl),
+        userAgent: editable("userAgent", form.userAgent),
         minDeposit: Number(form.minDeposit) || 0,
-        webhookSecret: form.webhookSecret || undefined,
         enabled: form.enabled,
       }),
     });
     const data = await res.json().catch(() => ({}));
     setSaving(false);
     setMsg(res.ok ? "Saved." : data.error || "Save failed");
-    if (res.ok) setForm((f) => ({ ...f, apiKey: "", webhookSecret: "", hasKey: data.hasKey, hasWebhookSecret: data.hasWebhookSecret }));
+    if (res.ok) setForm((f) => ({ ...f, secret: "", hasSecret: data.hasSecret }));
   }
 
   async function runTest() {
+    setTesting(true);
     setTest("Testing…");
-    const res = await fetch("/api/config/rival/test", { method: "POST" });
+    const res = await fetch("/api/config/whish/test", { method: "POST" });
     const data = await res.json().catch(() => ({}));
-    setTest(data.ok ? `Reachable (${data.detail})` : `Unreachable: ${data.detail || data.error}`);
+    setTesting(false);
+    setTest(data.ok ? `Connected (${data.detail})` : `Failed: ${data.detail || data.error}`);
   }
 
   return (
     <form onSubmit={save} className="card p-6 animate-fade-up">
       <SectionHeader
-        title="Rival · Whish Pay"
-        desc="Payment provider API key and endpoint."
+        title="Whish Pay"
+        desc="Direct Whish API credentials, as issued by Whish."
         on={form.enabled}
         onToggle={(v) => setForm({ ...form, enabled: v })}
       />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="API key (Bearer)" hint={cfg.hasKey ? "A key is saved · leave blank to keep it" : "tsk_<prefix>_<secret>"}>
-          <input type="password" placeholder={cfg.hasKey ? "•••••••• (unchanged)" : "tsk_…"} value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} className="field-input" />
+        <Field label="Environment" hint={pinned("baseUrl") ? `${ENV_HINT} · ${form.baseUrl}` : form.baseUrl}>
+          <select
+            disabled={pinned("baseUrl")}
+            value={preset ? preset.url : "custom"}
+            onChange={(e) => e.target.value !== "custom" && setForm({ ...form, baseUrl: e.target.value })}
+            className="field-input appearance-none"
+          >
+            {WHISH_ENVIRONMENTS.map((env) => (
+              <option key={env.url} value={env.url} className="bg-surface text-ink">{env.label}</option>
+            ))}
+            {!preset && <option value="custom" className="bg-surface text-ink">Custom</option>}
+          </select>
         </Field>
-        <Field label="Base URL" hint="Include /v1">
-          <input value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} className="field-input" />
+        <Field label="Channel" hint={pinned("channel") ? ENV_HINT : undefined}>
+          <input readOnly={pinned("channel")} value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value })} className="field-input font-mono" />
         </Field>
-        <Field label="Create payment path">
-          <input value={form.createPaymentPath} onChange={(e) => setForm({ ...form, createPaymentPath: e.target.value })} className="field-input" />
+        <Field label="Secret" hint={pinned("secret") ? ENV_HINT : cfg.hasSecret ? "Saved · leave blank to keep it" : "Provided by Whish"}>
+          <input type="password" disabled={pinned("secret")} value={form.secret} onChange={(e) => setForm({ ...form, secret: e.target.value })} className="field-input" />
         </Field>
-        <Field label="Status path" hint="Use {id} placeholder">
-          <input value={form.statusPath} onChange={(e) => setForm({ ...form, statusPath: e.target.value })} className="field-input" />
+        <Field label="Website URL" hint={pinned("websiteUrl") ? ENV_HINT : "The websiteUrl value provided by Whish"}>
+          <input readOnly={pinned("websiteUrl")} value={form.websiteUrl} onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })} className="field-input" />
         </Field>
-        <Field label="Health path">
-          <input value={form.healthPath} onChange={(e) => setForm({ ...form, healthPath: e.target.value })} className="field-input" />
+        <Field label="User-Agent" hint={pinned("userAgent") ? ENV_HINT : "Exactly as issued by Whish, e.g. AppName/1.0 (https://site; contact)"}>
+          <input readOnly={pinned("userAgent")} value={form.userAgent} onChange={(e) => setForm({ ...form, userAgent: e.target.value })} className="field-input font-mono" />
         </Field>
-        <Field label="Minimum deposit (USD)" hint="Clients can't deposit less than this">
+        <Field label="Minimum deposit (USD)" hint="Whish's own minimum is 1.00 USD">
           <input
             type="number"
             min="0"
@@ -150,25 +173,16 @@ function RivalForm({ cfg }: { cfg: RivalCfg }) {
             className="field-input font-mono"
           />
         </Field>
-        <Field label="Webhook secret" hint={cfg.hasWebhookSecret ? "Saved · leave blank to keep" : "verifies incoming Rival webhooks"}>
-          <input
-            type="password"
-            placeholder={cfg.hasWebhookSecret ? "•••••••• (unchanged)" : ""}
-            value={form.webhookSecret}
-            onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
-            className="field-input"
-          />
-        </Field>
       </div>
 
       <div className="mt-4 rounded-xl border border-line bg-surface-raised/40 p-3.5">
-        <p className="text-[13px] font-medium text-ink-muted">Webhook URL — register this in Rival</p>
+        <p className="text-[13px] font-medium text-ink-muted">Callback URL — sent to Whish automatically with each payment</p>
         <div className="mt-1.5 flex items-center gap-2">
-          <code className="flex-1 truncate rounded-lg bg-bg/60 px-3 py-2 font-mono text-xs text-brand-400">{cfg.webhookUrl}</code>
+          <code className="flex-1 truncate rounded-lg bg-surface-overlay px-3 py-2 font-mono text-xs text-brand-400">{cfg.callbackUrl}</code>
           <button
             type="button"
             onClick={() => {
-              navigator.clipboard?.writeText(cfg.webhookUrl);
+              navigator.clipboard?.writeText(cfg.callbackUrl);
               setCopied(true);
               setTimeout(() => setCopied(false), 1500);
             }}
@@ -177,11 +191,14 @@ function RivalForm({ cfg }: { cfg: RivalCfg }) {
             {copied ? "Copied" : "Copy"}
           </button>
         </div>
-        <p className="field-hint">Rival calls this on payment events; we then re-check status and credit MT5.</p>
+        <p className="field-hint">
+          Must be publicly reachable (Whish rejects localhost). If a firewall filters inbound traffic, allowlist Whish&apos;s
+          callback IPs — production 18.213.222.45, 52.21.189.51 · sandbox 52.21.55.64, 52.4.4.47.
+        </p>
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving…" : "Save"}</button>
-        <button type="button" onClick={runTest} className="btn-ghost">Test connection</button>
+        <button type="button" onClick={runTest} disabled={testing} className="btn-ghost">{testing ? "Testing…" : "Test connection"}</button>
         {msg && <span className="text-sm text-ink-muted">{msg}</span>}
         <TestResult text={test} />
       </div>
@@ -237,13 +254,13 @@ function Mt5Form({ cfg }: { cfg: Mt5Cfg }) {
       />
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="WebAPI host : port" hint="e.g. 185.67.127.231:443">
-          <input value={form.mt5Server} onChange={(e) => setForm({ ...form, mt5Server: e.target.value })} placeholder="host:port" className="field-input font-mono" />
+          <input value={form.mt5Server} onChange={(e) => setForm({ ...form, mt5Server: e.target.value })} className="field-input font-mono" />
         </Field>
         <Field label="Manager login" hint="must have WebAPI access enabled by the broker">
-          <input value={form.mt5Login} onChange={(e) => setForm({ ...form, mt5Login: e.target.value })} placeholder="1001" className="field-input font-mono" />
+          <input value={form.mt5Login} onChange={(e) => setForm({ ...form, mt5Login: e.target.value })} className="field-input font-mono" />
         </Field>
         <Field label="Manager password" hint={cfg.hasPassword ? "Saved · leave blank to keep" : "WebAPI manager password"}>
-          <input type="password" placeholder={cfg.hasPassword ? "•••••••• (unchanged)" : ""} value={form.mt5Password} onChange={(e) => setForm({ ...form, mt5Password: e.target.value })} className="field-input" />
+          <input type="password" value={form.mt5Password} onChange={(e) => setForm({ ...form, mt5Password: e.target.value })} className="field-input" />
         </Field>
         <Field label="Crypt method" hint="AES256OFB support coming — use NONE for now">
           <select value={form.cryptMethod} onChange={(e) => setForm({ ...form, cryptMethod: e.target.value as Mt5Cfg["cryptMethod"] })} className="field-input appearance-none">

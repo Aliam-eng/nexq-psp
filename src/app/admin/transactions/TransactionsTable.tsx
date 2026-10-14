@@ -12,7 +12,7 @@ type Row = {
   amount: number;
   currency: string;
   status: string;
-  rivalPaymentId: string | null;
+  whishExternalId: string | null;
   mt5DealId: string | null;
   errorMessage: string | null;
   createdAt: string;

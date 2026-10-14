@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = join(__dirname, "..", "public");
 const LOGO = join(OUT, "logo-nexq.png");
-const BG = [0x16, 0x17, 0x1a, 0xff]; // brand-dark canvas, opaque
+const BG = [0x39, 0x3c, 0x41, 0xff]; // nexQ charcoal, opaque
 
 // --- minimal PNG decode (8-bit RGBA, non-interlaced) ---
 function decodePNG(buf) {

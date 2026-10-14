@@ -1,17 +1,19 @@
 # nexQ Deposit
 
-Deposit portal that issues **Whish Pay** links via the **Rival Payments** API and credits
-the paid amount to the client's **MetaTrader 5** account automatically.
+Deposit portal that issues **Whish Pay** links directly through the **Whish Pay API** and
+credits the paid amount to the client's **MetaTrader 5** account automatically.
 
 ## Flow
 
-1. Client logs in → **New deposit** → picks a **trading account** → enters an **amount**.
-2. Backend creates a `Transaction` and calls Rival `POST /v1/integrations/whish/payments`
-   to get a **`collectUrl`** (the Whish Pay link) → client is redirected there to pay.
-3. Rival does **not** call us back — settlement is pushed to *their* CRM. So we **poll**
-   `GET /v1/integrations/whish/payments/{externalId}` (on the client's return page and via a
-   background sweep) to detect `PAID`.
-4. On `PAID`, we call the **MT5 gateway** to credit the account → status becomes `CREDITED`
+1. Client opens **/deposit** → enters their **MT5 account number** and an **amount**.
+2. Backend creates a `Transaction` with a fresh `externalId` and calls Whish
+   `POST /payment/whish` to get a **`collectUrl`** → client is redirected there and approves
+   the payment in the Whish app (OTP).
+3. Whish calls our **callback** `GET /api/webhooks/whish?externalId=…` on each attempt. The
+   callback is unauthenticated, so it only *triggers* a check: we confirm with
+   `POST /payment/collect/status` (also polled from the return page and the background sweep).
+   A failed attempt leaves the link payable (`pending`); only `success` or `failed` (expired) settle it.
+4. On `success`, we credit the account over **MT5 WebAPI** → status becomes `CREDITED`
    (with the MT5 deal id), or `CREDIT_FAILED` if the balance operation fails.
 5. Both client and technical dashboards show each transaction's status (done / not / failed).
 
@@ -19,8 +21,8 @@ Statuses: `PENDING → LINK_GENERATED → PAID → CREDITED` (or `CREDIT_FAILED`
 
 ## Two dashboards
 
-- **/admin/settings** (TECHNICAL role) — Rival **API key** (`tsk_...` Bearer) + **base URL** /
-  endpoint paths, and the **MT5 gateway** URL/key + the **MT5 connection** (server, manager
+- **/admin/settings** (TECHNICAL role) — Whish Pay **environment** (sandbox / production) +
+  **channel / secret / websiteUrl / User-Agent** headers, and the **MT5 gateway** URL/key + the **MT5 connection** (server, manager
   login, password) + default group, each with a *Test connection*. The MT5 connection entered
   here is forwarded to the Python gateway per request, so the gateway holds no broker secrets.
 - **/admin/transactions** (TECHNICAL role) — all deposits, filters, per-row **Sync**, and
@@ -56,8 +58,32 @@ Demo logins (password `password123`):
 - `client@nexq.local` — CLIENT (deposit form), has two MT5 accounts seeded
 
 Then in **/admin/settings**:
-- Rival: paste your company key (`tsk_...`), tick *Enabled*, Save.
+- Whish Pay: pick *Sandbox*, enter channel / secret / websiteUrl / User-Agent, tick *Enabled*, Save, *Test connection*.
+  Sandbox test payer: phone `96170123456`, OTP `111111`.
 - MT5: set gateway URL/key + **MT5 server, manager login, password**, tick *Enabled*, *Test connection*.
+
+## Tests
+
+```bash
+npm test                 # everything (integration tests skip without a test DB)
+npm run test:unit        # fast, no database: Whish client, deposit state machine, fees
+npm run test:integration # real API routes + Postgres + a mock Whish server
+```
+
+Integration tests need a **throwaway** Postgres whose database name contains `test`
+(they drop and re-create its schema, and refuse any other name):
+
+```bash
+docker run -d --rm --name nexq-test-db -e POSTGRES_PASSWORD=test -e POSTGRES_DB=nexq_test -p 55441:5432 postgres:16-alpine
+TEST_DATABASE_URL="postgresql://postgres:test@localhost:55441/nexq_test?schema=public" npm test
+docker stop nexq-test-db
+```
+
+What they cover: the documented Whish request/response contract (headers, envelope, `code: 500` =
+pending, error codes, the HTML 403 for non-public callback URLs); crediting MT5 only after Whish
+confirms `success`, exactly once even under parallel callbacks/polls (real row lock); failed
+attempts never failing a deposit; expiry; the sweep and settings auth; and the Rival → Whish
+migration over existing data.
 
 ## Deploy to a server (one command)
 
@@ -65,20 +91,20 @@ On a fresh Linux server with **Docker** + **Docker Compose v2**:
 
 ```bash
 git clone <this-repo> nexq-deposit && cd nexq-deposit
-./deploy.sh portal.giv.trade ops@giv.trade      # <domain> [acme-email]
+./deploy.sh deposit.nexqcapital.com admin@nexqcapital.com      # <domain> [acme-email]
 ```
 
 [deploy.sh](deploy.sh) generates secrets (preserved on re-deploys), writes `.env`, then brings
 up **Postgres + app + Caddy** via [docker-compose.prod.yml](docker-compose.prod.yml). **Caddy
 issues a real Let's Encrypt TLS cert automatically** for the domain, so the site is HTTPS
-(required for the PWA and Rival webhooks). It runs `prisma migrate deploy`, seeds the initial
+(required for the PWA and Whish callbacks — Whish rejects non-public callback URLs). It runs `prisma migrate deploy`, seeds the initial
 admin, and prints the admin login + password.
 
 Before/after running it:
 1. Point a **DNS A record**: `your-domain → server public IP`.
 2. Open ports **80 and 443** in the firewall.
 3. In **MT5 Administrator**, whitelist **this server's public IP** for the WebAPI manager.
-4. Log in at `https://<domain>/login`, go to **Settings**, set the Rival key, MT5 WebAPI
+4. Log in at `https://<domain>/login`, go to **Settings**, set the Whish Pay credentials, MT5 WebAPI
    host/login/password, min deposit, and (optionally) the webhook secret + register the
    webhook URL shown there.
 
@@ -122,11 +148,12 @@ healthy, runs `prisma migrate deploy`, seeds the **initial admin** (from `ADMIN_
 - **Reconciliation:** schedule `POST /api/sweep` (cron / Vercel cron) with header
   `x-cron-secret: $CRON_SECRET` to catch payments where the customer never returns.
 - **Secrets:** set a strong `AUTH_SECRET`; set `APP_BASE_URL` to the public URL (used for
-  Whish success/failure redirects).
+  Whish callbacks and redirects). The Whish secret is stored in the DB from Settings — encrypt
+  it (or move it to a secrets manager) before production.
 
 ## Key files
 
-- [src/lib/rival.ts](src/lib/rival.ts) — Rival/Whish Pay adapter (create / status / health)
+- [src/lib/whish.ts](src/lib/whish.ts) — direct Whish Pay client (create / collect status / balance)
 - [src/lib/mt5.ts](src/lib/mt5.ts) — MT5 gateway client
 - [src/lib/flow.ts](src/lib/flow.ts) — reconcile (poll PAID → credit MT5), idempotent
 - [src/app/deposit/](src/app/deposit/) — client form, Whish handoff, return/status page

@@ -30,14 +30,11 @@ async function main() {
 
   // Ensure the singleton config rows exist so Settings loads.
   await prisma.providerConfig.upsert({
-    where: { id: "rival" },
+    where: { id: "whish" },
     update: {},
     create: {
-      id: "rival",
-      baseUrl: "https://staging.portal.rivalpayments.com/v1",
-      createPaymentPath: "/integrations/whish/payments",
-      statusPath: "/integrations/whish/payments/{id}",
-      healthPath: "/health",
+      id: "whish",
+      baseUrl: "https://partner.api.sbx.whish.money/itel-service/api", // sandbox
       enabled: false,
     },
   });

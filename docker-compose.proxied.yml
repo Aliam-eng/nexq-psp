@@ -33,6 +33,11 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       RUN_SEED: ${RUN_SEED}
+      WHISH_BASE_URL: ${WHISH_BASE_URL:-}
+      WHISH_CHANNEL: ${WHISH_CHANNEL:-}
+      WHISH_SECRET: ${WHISH_SECRET:-}
+      WHISH_WEBSITE_URL: ${WHISH_WEBSITE_URL:-}
+      WHISH_USER_AGENT: ${WHISH_USER_AGENT:-}
     ports:
       - "127.0.0.1:${WEB_PORT:-8080}:3000" # localhost only; your proxy reaches it
 

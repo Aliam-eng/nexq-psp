@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
-export function LogoutButton() {
+export function LogoutButton({ onDark = false }: { onDark?: boolean }) {
   const router = useRouter();
   async function signOut() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -10,7 +10,7 @@ export function LogoutButton() {
     router.refresh();
   }
   return (
-    <button onClick={signOut} className="btn-quiet" type="button">
+    <button onClick={signOut} className={onDark ? "btn-on-dark" : "btn-quiet"} type="button">
       Sign out
     </button>
   );

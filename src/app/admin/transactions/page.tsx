@@ -25,7 +25,7 @@ export default async function AdminTransactions() {
     amount: t.amount,
     currency: t.currency,
     status: t.status,
-    rivalPaymentId: t.rivalPaymentId,
+    whishExternalId: t.whishExternalId,
     mt5DealId: t.mt5DealId,
     errorMessage: t.errorMessage,
     createdAt: t.createdAt.toISOString(),

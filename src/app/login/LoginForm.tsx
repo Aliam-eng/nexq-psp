@@ -39,7 +39,6 @@ export function LoginForm() {
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="name@nexqcapital.com"
           className="field-input"
         />
       </div>
@@ -51,7 +50,6 @@ export function LoginForm() {
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••"
           className="field-input"
         />
       </div>

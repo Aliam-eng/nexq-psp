@@ -30,6 +30,11 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       RUN_SEED: ${RUN_SEED}
+      WHISH_BASE_URL: ${WHISH_BASE_URL:-}
+      WHISH_CHANNEL: ${WHISH_CHANNEL:-}
+      WHISH_SECRET: ${WHISH_SECRET:-}
+      WHISH_WEBSITE_URL: ${WHISH_WEBSITE_URL:-}
+      WHISH_USER_AGENT: ${WHISH_USER_AGENT:-}
     expose:
       - "3000" # internal only; Caddy terminates TLS and proxies to it
 
