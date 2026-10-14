@@ -1,0 +1,5 @@
+# Shell scripts and container files must keep Linux line endings (they run on Ubuntu).
+*.sh text eol=lf
+Dockerfile text eol=lf
+deploy/Caddyfile text eol=lf
+*.yml text eol=lf
