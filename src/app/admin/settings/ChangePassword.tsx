@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SettingsSection } from "./SettingsForms";
 
 export function ChangePassword({ email }: { email: string }) {
   const [currentPassword, setCurrent] = useState("");
@@ -35,11 +36,19 @@ export function ChangePassword({ email }: { email: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="card p-6 animate-fade-up">
-      <div className="mb-5">
-        <h2 className="font-bold text-ink">Your account</h2>
-        <p className="text-sm text-ink-muted">Signed in as {email}</p>
-      </div>
+    <SettingsSection
+      title="Your account"
+      desc={<>Signed in as <span className="font-semibold text-ink">{email}</span>. Use a long, unique password.</>}
+      onSubmit={submit}
+      footer={
+        <>
+          <button type="submit" disabled={saving} className="btn-primary">
+            {saving ? "Saving…" : "Change password"}
+          </button>
+          {msg && <span className={`text-sm font-semibold ${msg.ok ? "text-success" : "text-danger"}`}>{msg.text}</span>}
+        </>
+      }
+    >
       <div className="grid gap-4 sm:grid-cols-3">
         <label className="block">
           <span className="field-label">Current password</span>
@@ -54,12 +63,6 @@ export function ChangePassword({ email }: { email: string }) {
           <input type="password" required autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="field-input" />
         </label>
       </div>
-      <div className="mt-5 flex items-center gap-3">
-        <button type="submit" disabled={saving} className="btn-primary">
-          {saving ? "Saving…" : "Change password"}
-        </button>
-        {msg && <span className={`text-sm ${msg.ok ? "text-brand-400" : "text-danger"}`}>{msg.text}</span>}
-      </div>
-    </form>
+    </SettingsSection>
   );
 }

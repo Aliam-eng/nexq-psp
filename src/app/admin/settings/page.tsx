@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getWhishCredentials, whishEnvFields } from "@/lib/whish";
-import { PageHeader, TopBar } from "@/components/ui";
+import { AdminShell } from "@/components/ui";
 import { SettingsForms } from "./SettingsForms";
 import { ChangePassword } from "./ChangePassword";
 
@@ -20,10 +20,8 @@ export default async function SettingsPage() {
   const mt5 = await prisma.mt5Config.findUnique({ where: { id: "mt5" } });
 
   return (
-    <>
-      <TopBar user={session} />
-      <main className="mx-auto max-w-3xl space-y-6 px-5 py-8">
-        <PageHeader title="Settings" subtitle="Your account, the Whish Pay provider, and the MT5 connection." />
+    <AdminShell user={session} title="Settings" subtitle="Your account, the Whish Pay provider, and the MT5 connection.">
+      <div className="max-w-5xl">
         <ChangePassword email={session.email} />
         <SettingsForms
           whish={{
@@ -46,7 +44,7 @@ export default async function SettingsPage() {
             hasPassword: !!mt5?.mt5Password,
           }}
         />
-      </main>
-    </>
+      </div>
+    </AdminShell>
   );
 }

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { PageHeader, StatCard, TopBar } from "@/components/ui";
+import { AdminShell } from "@/components/ui";
 import { TransactionsTable } from "./TransactionsTable";
 
 export const dynamic = "force-dynamic";
@@ -33,29 +33,45 @@ export default async function AdminTransactions() {
 
   const sum = (pred: (s: string) => boolean) =>
     rows.filter((r) => pred(r.status)).reduce((a, r) => a + r.amount, 0);
-  const stats = [
-    { label: "All deposits", value: String(rows.length), tone: "ink" as const },
-    { label: "Completed", value: rows.filter((r) => r.status === "CREDITED").length.toString(), tone: "success" as const },
-    { label: "In progress", value: rows.filter((r) => ["LINK_GENERATED", "PAID"].includes(r.status)).length.toString(), tone: "gold" as const },
-    { label: "Funded volume", value: `$${sum((s) => s === "CREDITED").toFixed(2)}`, tone: "ink" as const },
-  ];
+  const count = (...statuses: string[]) => rows.filter((r) => statuses.includes(r.status)).length;
+  const attention = count("CREDIT_FAILED");
 
   return (
-    <>
-      <TopBar user={session} />
-      <main className="mx-auto max-w-6xl px-5 py-8">
-        <PageHeader title="Deposits" subtitle="Every Whish deposit, from payment link to MT5 credit." />
-
-        <div className="mt-6 grid grid-cols-2 gap-3 animate-fade-up sm:grid-cols-4" style={{ animationDelay: "60ms" }}>
-          {stats.map((s) => (
-            <StatCard key={s.label} {...s} />
-          ))}
+    <AdminShell user={session} title="Deposits" subtitle="Every Whish deposit, from payment link to MT5 credit.">
+      {/* One summary panel, not a row of cards */}
+      <section className="card grid grid-cols-3 divide-x divide-line animate-fade-up md:grid-cols-4">
+        <div className="col-span-3 border-b border-line p-5 md:col-span-1 md:border-b-0">
+          <p className="text-xs font-semibold text-ink-muted">Funded volume</p>
+          <p className="text-brand-gradient mt-1 text-3xl font-extrabold tabular-nums">
+            ${sum((s) => s === "CREDITED").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <p className="mt-1 text-xs text-ink-dim">credited to MT5 · last {rows.length} deposits</p>
         </div>
+        <Metric label="Completed" value={count("CREDITED")} dot="bg-emerald-500" />
+        <Metric label="In progress" value={count("LINK_GENERATED", "PAID")} dot="bg-amber-500" />
+        <Metric
+          label="Needs attention"
+          value={attention}
+          dot={attention ? "bg-orange-500" : "bg-line-strong"}
+          note={attention ? "paid, MT5 credit failed" : "all clear"}
+        />
+      </section>
 
-        <div className="mt-6 animate-fade-up" style={{ animationDelay: "120ms" }}>
-          <TransactionsTable rows={rows} />
-        </div>
-      </main>
-    </>
+      <div className="mt-6 animate-fade-up" style={{ animationDelay: "60ms" }}>
+        <TransactionsTable rows={rows} />
+      </div>
+    </AdminShell>
+  );
+}
+
+function Metric({ label, value, dot, note }: { label: string; value: number; dot: string; note?: string }) {
+  return (
+    <div className="p-4 md:p-5">
+      <p className="flex items-center gap-2 text-xs font-semibold text-ink-muted">
+        <span className={`h-2 w-2 rounded-full ${dot}`} /> {label}
+      </p>
+      <p className="mt-1 text-3xl font-extrabold tabular-nums text-ink">{value}</p>
+      {note && <p className="mt-1 text-xs text-ink-dim">{note}</p>}
+    </div>
   );
 }

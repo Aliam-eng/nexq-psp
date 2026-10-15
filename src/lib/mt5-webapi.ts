@@ -329,63 +329,6 @@ export async function webapiDealsRaw(
   }
 }
 
-export type BalanceDeal = { deal: string; comment: string };
-export type ScanItem = { login: string; from: number; to: number }; // window in unix seconds
-
-// Fetch balance deals (Action=2) for many accounts, each within its own tight
-// time window. Uses a few parallel connections to stay quick while keeping load
-// on MT5 modest. Read-only.
-export async function webapiBalanceDeals(
-  cfg: WebApiConfig,
-  items: ScanItem[],
-  concurrency = 3
-): Promise<{ ok: boolean; byLogin: Record<string, BalanceDeal[]>; errors: Record<string, string>; detail?: string }> {
-  const byLogin: Record<string, BalanceDeal[]> = {};
-  const errors: Record<string, string> = {};
-  if (!cfg.server || !cfg.login || !cfg.password) return { ok: false, byLogin, errors, detail: "MT5 not configured" };
-  const { host, port } = parseHostPort(cfg.server);
-
-  const queue = [...items];
-  let connError: string | null = null;
-
-  async function worker() {
-    let conn: WebApiConnection | null = null;
-    try {
-      conn = await connect(host, port);
-      await authenticate(conn, cfg);
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const item = queue.shift();
-        if (!item) break;
-        try {
-          const { retcode, deals } = await fetchAllDeals(conn, item.login, item.from, item.to);
-          if (deals.length === 0 && retcode && !retcode.startsWith("0")) {
-            errors[item.login] = retcode;
-            byLogin[item.login] = [];
-            continue;
-          }
-          byLogin[item.login] = deals
-            .filter((d) => Number(d?.Action) === 2)
-            .map((d) => ({ deal: String(d.Deal ?? ""), comment: String(d.Comment ?? "") }));
-        } catch (e: any) {
-          errors[item.login] = e?.message || "query failed";
-          byLogin[item.login] = [];
-        }
-      }
-    } catch (e: any) {
-      connError = e?.message || "connection failed";
-    } finally {
-      conn?.close();
-    }
-  }
-
-  const workers = Math.max(1, Math.min(concurrency, items.length || 1));
-  await Promise.all(Array.from({ length: workers }, () => worker()));
-
-  if (Object.keys(byLogin).length === 0 && connError) return { ok: false, byLogin, errors, detail: connError };
-  return { ok: true, byLogin, errors };
-}
-
 export type WebApiDepositInput = WebApiConfig & {
   clientLogin: string;
   amount: number;

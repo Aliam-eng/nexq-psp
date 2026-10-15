@@ -36,56 +36,62 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// --- Admin top bar -------------------------------------------------------
-export function TopBar({ user }: { user: { email: string; role: string } }) {
+// --- Admin shell: charcoal sidebar (desktop) / compact bar (mobile) -------
+export function AdminShell({
+  user,
+  title,
+  subtitle,
+  actions,
+  children,
+}: {
+  user: { email: string; role: string };
+  title: string;
+  subtitle?: React.ReactNode;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <header className="sticky top-0 z-30 bg-charcoal/95 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-5 py-3">
-        <div className="flex items-center gap-5">
-          <div className="flex items-center gap-2.5">
+    <div className="min-h-screen md:grid md:grid-cols-[248px_1fr]">
+      {/* Sidebar */}
+      <aside className="band sticky top-0 z-30 flex flex-col md:h-screen">
+        <div className="flex items-center justify-between gap-3 px-5 py-4 md:block md:px-6 md:py-7">
+          <div>
             <Logo href="/admin/transactions" />
-            <span className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/70">
+            <p className="mt-1 hidden text-[11px] font-semibold uppercase tracking-[0.18em] text-white/50 md:block">
               Back office
-            </span>
+            </p>
           </div>
-          <AdminNav />
+          <div className="md:hidden">
+            <LogoutButton onDark />
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="hidden items-center gap-2 text-white/70 sm:flex">
-            <span className="bg-brand-gradient grid h-7 w-7 place-items-center rounded-full text-xs font-bold uppercase text-white">
+        <AdminNav />
+        <div className="mt-auto hidden border-t border-white/10 px-4 py-4 md:block">
+          <div className="flex items-center gap-3 px-2">
+            <span className="bg-brand-gradient grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold uppercase text-white">
               {user.email.charAt(0)}
             </span>
-            {user.email}
-          </span>
-          <LogoutButton onDark />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">{user.email}</p>
+              <p className="text-xs text-white/50">Administrator</p>
+            </div>
+          </div>
+          <div className="mt-3">
+            <LogoutButton onDark />
+          </div>
         </div>
-      </div>
-      <div className="bg-brand-gradient h-0.5" />
-    </header>
-  );
-}
+      </aside>
 
-// --- Admin page heading --------------------------------------------------
-export function PageHeader({ title, subtitle }: { title: string; subtitle: React.ReactNode }) {
-  return (
-    <div className="animate-fade-up">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-400">nexQ Back office</p>
-      <h1 className="mt-2 text-2xl font-bold tracking-tight text-ink">{title}</h1>
-      <p className="mt-1 text-sm text-ink-muted">{subtitle}</p>
-    </div>
-  );
-}
-
-// --- Stat tile -----------------------------------------------------------
-const TONE = { ink: "text-ink", success: "text-success", gold: "text-gold", danger: "text-danger" };
-
-export function StatCard({ label, value, tone = "ink" }: { label: string; value: string; tone?: keyof typeof TONE }) {
-  return (
-    <div className="card overflow-hidden">
-      <div className="bg-brand-gradient h-0.5 opacity-70" />
-      <div className="p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-dim">{label}</p>
-        <p className={`mt-1.5 text-2xl font-bold tabular-nums tracking-tight ${TONE[tone]}`}>{value}</p>
+      {/* Content */}
+      <div className="min-w-0">
+        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-line bg-surface px-5 py-6 md:px-10">
+          <div className="animate-fade-up">
+            <h1 className="text-2xl font-extrabold tracking-tight text-ink">{title}</h1>
+            {subtitle && <p className="mt-1 text-sm text-ink-muted">{subtitle}</p>}
+          </div>
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
+        </header>
+        <main className="px-5 py-6 md:px-10 md:py-8">{children}</main>
       </div>
     </div>
   );

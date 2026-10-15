@@ -58,30 +58,53 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
 function TestResult({ text }: { text: string | null }) {
   if (!text) return null;
   const ok = text.toLowerCase().includes("connect") || text.toLowerCase().includes("reachable");
-  return <span className={`text-sm ${ok ? "text-brand-400" : "text-ink-muted"}`}>{text}</span>;
+  return <span className={`text-sm font-semibold ${ok ? "text-success" : "text-danger"}`}>{text}</span>;
 }
 
 export function SettingsForms({ whish, mt5 }: { whish: WhishCfg; mt5: Mt5Cfg }) {
   return (
-    <div className="space-y-6">
+    <>
       <WhishForm cfg={whish} />
       <Mt5Form cfg={mt5} />
-    </div>
+    </>
   );
 }
 
-function SectionHeader({ title, desc, on, onToggle }: { title: string; desc: string; on: boolean; onToggle: (v: boolean) => void }) {
+// Two-column settings row: what it is on the left, the form card on the right.
+export function SettingsSection({
+  title,
+  desc,
+  toggle,
+  onSubmit,
+  footer,
+  children,
+}: {
+  title: string;
+  desc: React.ReactNode;
+  toggle?: { on: boolean; onChange: (v: boolean) => void };
+  onSubmit: (e: React.FormEvent) => void;
+  footer: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="mb-5 flex items-start justify-between gap-4">
+    <section className="grid gap-5 border-b border-line py-8 first:pt-0 last:border-0 md:grid-cols-[260px_1fr] md:gap-10">
       <div>
-        <h2 className="font-bold text-ink">{title}</h2>
-        <p className="text-sm text-ink-muted">{desc}</p>
+        <h2 className="text-base font-extrabold text-ink">{title}</h2>
+        <p className="mt-1 text-sm leading-relaxed text-ink-muted">{desc}</p>
+        {toggle && (
+          <div className="mt-4 flex items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-2.5">
+            <Toggle on={toggle.on} onChange={toggle.onChange} />
+            <span className={`text-sm font-semibold ${toggle.on ? "text-success" : "text-ink-muted"}`}>
+              {toggle.on ? "Live" : "Off"}
+            </span>
+          </div>
+        )}
       </div>
-      <div className="flex items-center gap-2 pt-0.5">
-        <span className="text-xs text-ink-dim">{on ? "Enabled" : "Disabled"}</span>
-        <Toggle on={on} onChange={onToggle} />
-      </div>
-    </div>
+      <form onSubmit={onSubmit} className="card overflow-hidden">
+        <div className="p-6">{children}</div>
+        <div className="flex flex-wrap items-center gap-3 border-t border-line bg-surface-raised px-6 py-3.5">{footer}</div>
+      </form>
+    </section>
   );
 }
 
@@ -130,13 +153,20 @@ function WhishForm({ cfg }: { cfg: WhishCfg }) {
   }
 
   return (
-    <form onSubmit={save} className="card p-6 animate-fade-up">
-      <SectionHeader
-        title="Whish Pay"
-        desc="Direct Whish API credentials, as issued by Whish."
-        on={form.enabled}
-        onToggle={(v) => setForm({ ...form, enabled: v })}
-      />
+    <SettingsSection
+      title="Whish Pay"
+      desc="Direct Whish API credentials, as issued by Whish. Turn it on to accept deposits."
+      toggle={{ on: form.enabled, onChange: (v) => setForm({ ...form, enabled: v }) }}
+      onSubmit={save}
+      footer={
+        <>
+          <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving…" : "Save changes"}</button>
+          <button type="button" onClick={runTest} disabled={testing} className="btn-ghost">{testing ? "Testing…" : "Test connection"}</button>
+          {msg && <span className="text-sm text-ink-muted">{msg}</span>}
+          <TestResult text={test} />
+        </>
+      }
+    >
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Environment" hint={pinned("baseUrl") ? `${ENV_HINT} · ${form.baseUrl}` : form.baseUrl}>
           <select
@@ -175,8 +205,8 @@ function WhishForm({ cfg }: { cfg: WhishCfg }) {
         </Field>
       </div>
 
-      <div className="mt-4 rounded-xl border border-line bg-surface-raised/40 p-3.5">
-        <p className="text-[13px] font-medium text-ink-muted">Callback URL — sent to Whish automatically with each payment</p>
+      <div className="mt-5 border-t border-line pt-5">
+        <p className="text-[13px] font-semibold text-ink">Callback URL <span className="font-normal text-ink-muted">· sent to Whish automatically with each payment</span></p>
         <div className="mt-1.5 flex items-center gap-2">
           <code className="flex-1 truncate rounded-lg bg-surface-overlay px-3 py-2 font-mono text-xs text-brand-400">{cfg.callbackUrl}</code>
           <button
@@ -196,13 +226,7 @@ function WhishForm({ cfg }: { cfg: WhishCfg }) {
           callback IPs — production 18.213.222.45, 52.21.189.51 · sandbox 52.21.55.64, 52.4.4.47.
         </p>
       </div>
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving…" : "Save"}</button>
-        <button type="button" onClick={runTest} disabled={testing} className="btn-ghost">{testing ? "Testing…" : "Test connection"}</button>
-        {msg && <span className="text-sm text-ink-muted">{msg}</span>}
-        <TestResult text={test} />
-      </div>
-    </form>
+    </SettingsSection>
   );
 }
 
@@ -245,13 +269,20 @@ function Mt5Form({ cfg }: { cfg: Mt5Cfg }) {
   }
 
   return (
-    <form onSubmit={save} className="card p-6 animate-fade-up">
-      <SectionHeader
-        title="MT5 · WebAPI"
-        desc="Direct WebAPI connection used to credit deposits to MT5."
-        on={form.enabled}
-        onToggle={(v) => setForm({ ...form, enabled: v })}
-      />
+    <SettingsSection
+      title="MT5 · WebAPI"
+      desc="Manager connection used to credit paid deposits to client accounts. The broker must allowlist this server's IP."
+      toggle={{ on: form.enabled, onChange: (v) => setForm({ ...form, enabled: v }) }}
+      onSubmit={save}
+      footer={
+        <>
+          <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving…" : "Save changes"}</button>
+          <button type="button" onClick={runTest} disabled={testing} className="btn-ghost">{testing ? "Testing…" : "Test connection"}</button>
+          {msg && <span className="text-sm text-ink-muted">{msg}</span>}
+          <TestResult text={test} />
+        </>
+      }
+    >
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="WebAPI host : port" hint="e.g. 185.67.127.231:443">
           <input value={form.mt5Server} onChange={(e) => setForm({ ...form, mt5Server: e.target.value })} className="field-input font-mono" />
@@ -272,12 +303,6 @@ function Mt5Form({ cfg }: { cfg: Mt5Cfg }) {
           <input value={form.defaultGroup} onChange={(e) => setForm({ ...form, defaultGroup: e.target.value })} className="field-input" />
         </Field>
       </div>
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving…" : "Save"}</button>
-        <button type="button" onClick={runTest} disabled={testing} className="btn-ghost">{testing ? "Testing…" : "Test connection"}</button>
-        {msg && <span className="text-sm text-ink-muted">{msg}</span>}
-        <TestResult text={test} />
-      </div>
-    </form>
+    </SettingsSection>
   );
 }
