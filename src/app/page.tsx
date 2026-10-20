@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { currentStaff } from "@/lib/access";
 
 export default async function Home() {
-  const session = await getSession();
-  // Staff go to the dashboard; everyone else lands on the public deposit page.
-  if (session?.role === "TECHNICAL") redirect("/admin/transactions");
+  // Active staff go to the dashboard; everyone else lands on the public deposit page.
+  if (await currentStaff()) redirect("/admin/transactions");
   redirect("/deposit");
 }

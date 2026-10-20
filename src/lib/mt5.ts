@@ -43,6 +43,30 @@ export async function mt5Deposit(input: Mt5DepositInput): Promise<Mt5DepositResu
   return { ok: false, message: result.message };
 }
 
+// Deduct a withdrawal from the client's MT5 balance, exactly once per reference.
+// CHECK_MARGIN=1 so MT5 itself refuses if the account's free margin can't cover it.
+export async function mt5Withdraw(input: Mt5DepositInput): Promise<Mt5DepositResult> {
+  const cfg = await getConfig();
+  if (!cfg.enabled) return { ok: false, message: "MT5 integration is disabled" };
+  if (!cfg.mt5Server || !cfg.mt5Login || !cfg.mt5Password)
+    return { ok: false, message: "MT5 WebAPI connection (host/login/password) not configured" };
+  if (!(input.amount > 0)) return { ok: false, message: "Withdrawal amount must be positive" };
+
+  const result = await webapiDeposit({
+    server: cfg.mt5Server,
+    login: cfg.mt5Login,
+    password: cfg.mt5Password,
+    cryptMethod: cfg.cryptMethod,
+    clientLogin: input.login,
+    amount: -input.amount,
+    comment: input.comment,
+    reference: input.reference,
+    checkMargin: true,
+  });
+  if (result.ok) return { ok: true, dealId: result.dealId, message: "withdrawal accepted" };
+  return { ok: false, message: result.message };
+}
+
 // "Test connection" from Settings — performs the WebAPI auth handshake.
 export async function mt5TestConnect(): Promise<{ ok: boolean; detail: string }> {
   const cfg = await getConfig();

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { isStaffRole } from "@/lib/roles";
 
 export function LoginForm() {
   const router = useRouter();
@@ -25,7 +26,7 @@ export function LoginForm() {
       setError(data.error || "Sign in failed");
       return;
     }
-    router.push(data.role === "TECHNICAL" ? "/admin/transactions" : "/deposit");
+    router.push(isStaffRole(data.role) ? "/admin/transactions" : "/deposit");
     router.refresh();
   }
 

@@ -1,19 +1,28 @@
 import { PublicFooter, PublicHeader } from "@/components/PublicHeader";
 import { prisma } from "@/lib/db";
-import { DepositForm } from "./DepositForm";
+import { DepositForm, type DepositMethod } from "./DepositForm";
+import { getWhishCredentials } from "@/lib/whish";
+import { getThreePayConfig } from "@/lib/threepay";
 
 export const dynamic = "force-dynamic";
 
 const STEPS = [
   { title: "Enter your details", body: "Your nexQ MT5 account number and the amount you'd like to add." },
-  { title: "Confirm with Whish", body: "Approve the payment with the code Whish sends you." },
-  { title: "Funds land automatically", body: "Your balance is credited the moment Whish confirms." },
+  { title: "Pay with Whish or USDT", body: "Approve in the Whish app, or send USDT on the TRON (TRC20) network." },
+  { title: "Funds land automatically", body: "Your balance is credited as soon as the payment is confirmed." },
 ];
 
 // Public deposit page — no login required.
 export default async function DepositPage() {
-  const cfg = await prisma.providerConfig.findUnique({ where: { id: "whish" }, select: { minDeposit: true } });
-  const minDeposit = cfg?.minDeposit ?? 0;
+  // Only offer the payment methods that are switched on in Settings.
+  const [whish, whishRow, threepay] = await Promise.all([
+    getWhishCredentials(),
+    prisma.providerConfig.findUnique({ where: { id: "whish" }, select: { minDeposit: true } }),
+    getThreePayConfig(),
+  ]);
+  const methods: DepositMethod[] = [];
+  if (whish.enabled) methods.push({ key: "WHISH", min: Math.max(whishRow?.minDeposit ?? 0, 1) });
+  if (threepay.enabled) methods.push({ key: "USDT_TRC20", min: Math.max(threepay.minDeposit, 1) });
   return (
     <>
       <PublicHeader />
@@ -29,8 +38,8 @@ export default async function DepositPage() {
               Fund your trading account in <span className="text-brand-gradient">seconds.</span>
             </h1>
             <p className="mt-4 max-w-md text-[15px] leading-relaxed text-white/70">
-              Pay straight from your <span className="font-semibold text-white">Whish</span> balance. No card details,
-              no bank transfer, no waiting.
+              Pay from your <span className="font-semibold text-white">Whish</span> wallet or with{" "}
+              <span className="font-semibold text-white">USDT</span>. No card details, no bank transfer, no waiting.
             </p>
           </div>
         </div>
@@ -55,7 +64,7 @@ export default async function DepositPage() {
 
         {/* Form card overlaps the hero band */}
         <section className="order-1 -mt-20 animate-fade-up md:order-2 md:-mt-64" style={{ animationDelay: "60ms" }}>
-          <DepositForm minDeposit={minDeposit} />
+          <DepositForm methods={methods} />
         </section>
       </main>
       <PublicFooter />

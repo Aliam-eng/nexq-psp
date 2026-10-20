@@ -67,7 +67,9 @@ function seed(over: Row = {}): Row {
     amount: 50,
     currency: "USD",
     status: "LINK_GENERATED",
+    method: "WHISH",
     whishExternalId: "ext-1",
+    threepayInvoiceNo: null, // real rows store an absent invoice as NULL
     mt5DealId: null,
     creditingAt: null,
     errorMessage: null,

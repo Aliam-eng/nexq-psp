@@ -27,13 +27,13 @@ function getSecret(): Uint8Array {
 export type SessionUser = {
   id: string;
   email: string;
-  role: "CLIENT" | "TECHNICAL";
+  role: string; // CLIENT | TECHNICAL (admin) | OPERATOR — see lib/roles.ts
   name?: string | null;
 };
 
 export async function verifyCredentials(email: string, password: string) {
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) return null;
+  if (!user || !user.isActive) return null; // disabled accounts can't sign in
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return null;
   return user;

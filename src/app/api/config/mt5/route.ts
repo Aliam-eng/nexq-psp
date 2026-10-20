@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getSession } from "@/lib/auth";
+import { currentAdmin } from "@/lib/access";
+import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 
 const schema = z.object({
@@ -13,9 +14,8 @@ const schema = z.object({
 });
 
 export async function PUT(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "TECHNICAL")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const admin = await currentAdmin();
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
@@ -36,6 +36,9 @@ export async function PUT(req: Request) {
     update: data,
     create: { id: "mt5", ...data, mt5Password: d.mt5Password ?? null },
   });
+
+  const changed = Object.keys(d).filter((k) => (d as Record<string, unknown>)[k] !== undefined && (d as Record<string, unknown>)[k] !== "");
+  await logAudit(admin, "settings.mt5", { type: "Settings", id: "mt5" }, { changed, enabled: cfg.enabled });
 
   return NextResponse.json({ ok: true, hasPassword: !!cfg.mt5Password, enabled: cfg.enabled });
 }

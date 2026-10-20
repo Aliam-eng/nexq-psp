@@ -10,6 +10,8 @@ type Row = {
   client: string;
   mt5Login: string;
   amount: number;
+  grossAmount: number | null;
+  method: string;
   currency: string;
   status: string;
   whishExternalId: string | null;
@@ -143,10 +145,16 @@ export function TransactionsTable({ rows }: { rows: Row[] }) {
                       {when(r.createdAt)} · {r.client}
                     </p>
                   </td>
-                  <td className="px-5 py-3.5 font-mono text-ink">{r.mt5Login}</td>
+                  <td className="px-5 py-3.5">
+                    <p className="font-mono text-ink">{r.mt5Login}</p>
+                    <MethodTag method={r.method} />
+                  </td>
                   <td className="whitespace-nowrap px-5 py-3.5 text-right">
                     <span className="font-bold tabular-nums text-ink">{r.amount.toFixed(2)}</span>{" "}
                     <span className="text-xs text-ink-dim">{r.currency}</span>
+                    {r.method === "USDT_TRC20" && r.grossAmount != null && r.grossAmount !== r.amount && (
+                      <p className="text-xs text-ink-dim">of {r.grossAmount.toFixed(2)} USDT sent</p>
+                    )}
                   </td>
                   <td className="px-5 py-3.5">
                     <StatusBadge status={r.status} />
@@ -174,6 +182,7 @@ export function TransactionsTable({ rows }: { rows: Row[] }) {
                   <p className="mt-0.5 text-xs text-ink-dim" suppressHydrationWarning>
                     MT5 {r.mt5Login} · {when(r.createdAt)}
                   </p>
+                  <MethodTag method={r.method} />
                   <div className="mt-2">
                     <StatusBadge status={r.status} />
                   </div>
@@ -191,6 +200,15 @@ export function TransactionsTable({ rows }: { rows: Row[] }) {
         </>
       )}
     </section>
+  );
+}
+
+function MethodTag({ method }: { method: string }) {
+  const usdt = method === "USDT_TRC20";
+  return (
+    <span className={`mt-1 inline-block rounded px-1.5 py-px text-[10px] font-bold uppercase ${usdt ? "bg-teal-100 text-teal-800" : "bg-surface-overlay text-ink-muted"}`}>
+      {usdt ? "USDT" : "Whish"}
+    </span>
   );
 }
 

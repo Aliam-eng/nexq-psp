@@ -12,7 +12,7 @@ export default async function ReturnPage({ searchParams }: { searchParams: { tx?
       <section className="band">
         <div className="mx-auto max-w-xl px-5 pb-24 pt-10">
           <h1 className="animate-fade-up text-2xl font-extrabold tracking-tight sm:text-3xl">Deposit status</h1>
-          <p className="mt-1 text-sm text-white/70">Live from Whish Pay and your MT5 account.</p>
+          <p className="mt-1 text-sm text-white/70">Live from your payment provider and your MT5 account.</p>
         </div>
       </section>
       <main className="mx-auto -mt-16 max-w-xl px-5">
@@ -32,6 +32,7 @@ export default async function ReturnPage({ searchParams }: { searchParams: { tx?
               currency={tx.currency}
               mt5Login={tx.mt5Login}
               initialStatus={tx.status}
+              method={tx.method}
             />
           </div>
         )}

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { createPayment, WhishError, WhishPendingError } from "@/lib/whish";
 import { computeFee, computeTotal } from "@/lib/fees";
+import { createInvoice, getThreePayConfig, ThreePayError } from "@/lib/threepay";
 
 // Public (no-login) deposit creation. The client enters their MT5 account
 // number and amount; we create a Whish Pay link (direct Whish API) and return it.
@@ -13,6 +14,7 @@ const schema = z.object({
   currency: z.string().trim().min(3).max(8).default("USD"),
   email: z.string().email().optional().or(z.literal("")).transform((v) => v || undefined),
   name: z.string().trim().max(120).optional(),
+  method: z.enum(["WHISH", "USDT_TRC20"]).default("WHISH"),
 });
 
 export async function POST(req: Request) {
@@ -23,7 +25,8 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const { mt5Login, amount, currency, email, name } = parsed.data;
+  const { mt5Login, amount, currency, email, name, method } = parsed.data;
+  if (method === "USDT_TRC20") return createUsdtDeposit({ mt5Login, amount, email, name });
 
   // Enforce the admin-configured minimum deposit server-side.
   const cfg = await prisma.providerConfig.findUnique({ where: { id: "whish" }, select: { minDeposit: true } });
@@ -113,5 +116,57 @@ export async function POST(req: Request) {
         ? e.message // safe, user-actionable (amount / currency issues)
         : "Payment service is temporarily unavailable. Please try again later.";
     return NextResponse.json({ error: clientMessage }, { status: 502 });
+  }
+}
+
+// USDT (TRC20) via 3Pay: create an invoice and send the client to 3Pay's hosted page.
+// The amount MT5 is credited is fixed when 3Pay confirms (what 3Pay credits us, after its fee).
+async function createUsdtDeposit(input: { mt5Login: string; amount: number; email?: string; name?: string }) {
+  const cfg = await getThreePayConfig();
+  if (!cfg.enabled) return NextResponse.json({ error: "USDT deposits are not available right now" }, { status: 400 });
+  const minDeposit = Math.max(cfg.minDeposit, 1); // 3Pay's own minimum is 1 USDT
+  if (input.amount < minDeposit) {
+    return NextResponse.json({ error: `Minimum USDT deposit is ${minDeposit.toFixed(2)} USDT` }, { status: 400 });
+  }
+
+  const reference = `NEXQ-${randomUUID().slice(0, 8).toUpperCase()}`;
+  const base = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+  const tx = await prisma.transaction.create({
+    data: {
+      mt5Login: input.mt5Login,
+      clientEmail: input.email,
+      clientName: input.name,
+      amount: input.amount,
+      grossAmount: input.amount,
+      currency: "USD",
+      method: "USDT_TRC20",
+      reference,
+      status: "PENDING",
+    },
+  });
+
+  try {
+    // No blind retry: 3Pay has no idempotency key, so a repeat call could make a second invoice.
+    const invoice = await createInvoice({
+      amount: input.amount,
+      referenceId: reference,
+      description: `nexQ deposit ${reference} - MT5 ${input.mt5Login}`,
+      webhookUrl: `${base}/api/webhooks/3pay`,
+      callbackUrl: `${base}/deposit/return?tx=${tx.id}`,
+    });
+    await prisma.transaction.update({
+      where: { id: tx.id },
+      data: {
+        status: "LINK_GENERATED",
+        threepayInvoiceNo: invoice.invoiceNo,
+        threepayTxId: invoice.transactionId,
+        providerPayload: JSON.stringify(invoice),
+      },
+    });
+    return NextResponse.json({ ok: true, transactionId: tx.id, reference, collectUrl: invoice.paymentUrl });
+  } catch (e: any) {
+    const detail = e instanceof ThreePayError ? `3Pay: ${e.message}` : e?.message || "Invoice creation failed";
+    await prisma.transaction.update({ where: { id: tx.id }, data: { status: "FAILED", errorMessage: detail } });
+    return NextResponse.json({ error: "Payment service is temporarily unavailable. Please try again later." }, { status: 502 });
   }
 }

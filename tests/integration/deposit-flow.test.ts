@@ -33,6 +33,11 @@ describe.skipIf(!hasTestDb)("deposit flow (Postgres + mock Whish)", () => {
     callback(new Request(`http://app/api/webhooks/whish?externalId=${externalId}&result=${result}`));
   const tx = (id: string) => prisma.transaction.findUniqueOrThrow({ where: { id } });
   const createdBody = () => whish.calls.filter((c) => c.path === "/payment/whish").at(-1)!.body;
+  // Guards re-check the account in the DB, so sessions must belong to real users.
+  const staffSession = async (email: string, role: string) => {
+    const u = await prisma.user.upsert({ where: { email }, update: { role, isActive: true }, create: { email, role, password: "x" } });
+    return { id: u.id, email: u.email, role: u.role };
+  };
 
   beforeAll(async () => {
     resetDatabase(TEST_DATABASE_URL);
@@ -298,13 +303,13 @@ describe.skipIf(!hasTestDb)("deposit flow (Postgres + mock Whish)", () => {
     it("are admin-only", async () => {
       const req = new Request("http://app/api/config/whish", { method: "PUT", body: "{}" });
       expect((await saveConfig(req)).status).toBe(403);
-      session.current = { id: "u1", email: "client@example.com", role: "CLIENT" };
+      session.current = await staffSession("client@example.com", "CLIENT");
       expect((await saveConfig(new Request("http://app", { method: "PUT", body: "{}" }))).status).toBe(403);
       expect((await testConnection()).status).toBe(403);
     });
 
     it("save credentials without ever wiping a stored secret", async () => {
-      session.current = { id: "u1", email: "admin@example.com", role: "TECHNICAL" };
+      session.current = await staffSession("admin@example.com", "TECHNICAL");
       const put = (body: unknown) =>
         saveConfig(new Request("http://app/api/config/whish", { method: "PUT", body: JSON.stringify(body) }));
 
@@ -319,7 +324,7 @@ describe.skipIf(!hasTestDb)("deposit flow (Postgres + mock Whish)", () => {
     });
 
     it("test connection reads the Whish balance with the saved credentials", async () => {
-      session.current = { id: "u1", email: "admin@example.com", role: "TECHNICAL" };
+      session.current = await staffSession("admin@example.com", "TECHNICAL");
       expect(await (await testConnection()).json()).toEqual({ ok: true, detail: "balance USD 10439.00" });
 
       await prisma.providerConfig.update({ where: { id: "whish" }, data: { secret: "WRONG" } });

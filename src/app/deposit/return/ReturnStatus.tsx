@@ -13,7 +13,10 @@ export function ReturnStatus(props: {
   currency: string;
   mt5Login: string;
   initialStatus: string;
+  method?: string;
 }) {
+  const usdt = props.method === "USDT_TRC20";
+  const rail = usdt ? "USDT" : "Whish";
   const [status, setStatus] = useState(props.initialStatus);
   const [deal, setDeal] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -55,6 +58,8 @@ export function ReturnStatus(props: {
     ? "Deposit not completed"
     : status === "PAID"
     ? "Paid — crediting your account"
+    : usdt
+    ? "Waiting for your USDT"
     : "Waiting for Whish";
 
   // Friendly copy only — raw provider/MT5 errors stay in the back office.
@@ -67,14 +72,16 @@ export function ReturnStatus(props: {
       ? "The payment link expired before it was paid. No money was taken — start a new deposit any time."
       : "The payment wasn't completed. You can start a new deposit at any time."
     : status === "PAID"
-    ? "Whish confirmed your payment. We're adding it to your MT5 account now."
+    ? `${usdt ? "Your USDT payment is confirmed" : "Whish confirmed your payment"}. We're adding it to your MT5 account now.`
+    : usdt
+    ? "Send the exact amount on the TRON (TRC20) network to the address shown on the payment page. This page updates once it's confirmed on-chain."
     : "Approve the payment in the Whish app. This page updates on its own — no need to refresh.";
 
   // Progress timeline: link → paid → credited.
   const paidReached = ["PAID", "CREDITED", "CREDIT_FAILED"].includes(status);
   const steps: { label: string; state: "done" | "active" | "todo" | "error" }[] = [
     { label: "Payment link created", state: "done" },
-    { label: "Paid with Whish", state: paidReached ? "done" : failed ? "error" : "active" },
+    { label: `Paid with ${rail}`, state: paidReached ? "done" : failed ? "error" : "active" },
     {
       label: "Credited to MT5",
       state: success ? "done" : creditFailed ? "error" : status === "PAID" ? "active" : "todo",

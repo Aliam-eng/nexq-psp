@@ -331,9 +331,10 @@ export async function webapiDealsRaw(
 
 export type WebApiDepositInput = WebApiConfig & {
   clientLogin: string;
-  amount: number;
+  amount: number; // positive = deposit, negative = withdrawal
   comment: string;
-  reference: string; // unique tag we match on to avoid double-crediting
+  reference: string; // unique tag we match on to avoid double-crediting / double-deducting
+  checkMargin?: boolean; // withdrawals: let MT5 refuse if free margin is too low
 };
 
 // Look for an already-existing balance deal carrying our reference in its
@@ -350,10 +351,11 @@ async function findExistingDeal(conn: WebApiConnection, login: string, reference
   return match ? String(match.Deal ?? "") : null;
 }
 
-// Credit a deposit EXACTLY ONCE. Before sending TRADE_BALANCE we ask MT5 whether
-// a deal for this reference already exists (covers a crash/retry after a prior
-// credit). Combined with the DB-level claim in flow.ts, a deposit can never be
-// credited twice. TYPE=2 is DEAL_BALANCE (deposit when amount is positive).
+// Apply a balance operation EXACTLY ONCE. Before sending TRADE_BALANCE we ask MT5
+// whether a deal for this reference already exists (covers a crash/retry after a
+// prior attempt). Combined with the DB-level claims in flow.ts / withdrawals.ts,
+// money can never move twice for one reference. TYPE=2 is DEAL_BALANCE:
+// positive BALANCE = deposit, negative = withdrawal.
 export async function webapiDeposit(
   input: WebApiDepositInput
 ): Promise<{ ok: true; dealId: string; existing?: boolean; checkMs?: number } | { ok: false; message: string }> {
@@ -377,7 +379,7 @@ export async function webapiDeposit(
       TYPE: "2",
       BALANCE: input.amount.toFixed(2),
       COMMENT: input.comment,
-      CHECK_MARGIN: "0",
+      CHECK_MARGIN: input.checkMargin ? "1" : "0",
     });
     if (res.retcode !== 0) return { ok: false, message: `TRADE_BALANCE failed: ${res.rettext || "error"}` };
     return { ok: true, dealId: String(res.params.TICKET || ""), existing: false, checkMs };

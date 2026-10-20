@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { currentStaff } from "@/lib/access";
 import { prisma } from "@/lib/db";
 import { AdminShell } from "@/components/ui";
 import { TransactionsTable } from "./TransactionsTable";
@@ -7,9 +7,8 @@ import { TransactionsTable } from "./TransactionsTable";
 export const dynamic = "force-dynamic";
 
 export default async function AdminTransactions() {
-  const session = await getSession();
+  const session = await currentStaff();
   if (!session) redirect("/login");
-  if (session.role !== "TECHNICAL") redirect("/deposit");
 
   const txns = await prisma.transaction.findMany({
     orderBy: { createdAt: "desc" },
@@ -23,6 +22,8 @@ export default async function AdminTransactions() {
     client: t.user?.email ?? t.clientEmail ?? "guest",
     mt5Login: t.mt5Login,
     amount: t.amount,
+    grossAmount: t.grossAmount,
+    method: t.method,
     currency: t.currency,
     status: t.status,
     whishExternalId: t.whishExternalId,
@@ -37,7 +38,7 @@ export default async function AdminTransactions() {
   const attention = count("CREDIT_FAILED");
 
   return (
-    <AdminShell user={session} title="Deposits" subtitle="Every Whish deposit, from payment link to MT5 credit.">
+    <AdminShell user={session} title="Deposits" subtitle="Every deposit — Whish Pay and USDT — from payment to MT5 credit.">
       {/* One summary panel, not a row of cards */}
       <section className="card grid grid-cols-3 divide-x divide-line animate-fade-up md:grid-cols-4">
         <div className="col-span-3 border-b border-line p-5 md:col-span-1 md:border-b-0">

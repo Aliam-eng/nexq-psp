@@ -19,14 +19,62 @@ credits the paid amount to the client's **MetaTrader 5** account automatically.
 
 Statuses: `PENDING → LINK_GENERATED → PAID → CREDITED` (or `CREDIT_FAILED` / `FAILED`).
 
-## Two dashboards
+## Withdrawals
 
-- **/admin/settings** (TECHNICAL role) — Whish Pay **environment** (sandbox / production) +
-  **channel / secret / websiteUrl / User-Agent** headers, and the **MT5 gateway** URL/key + the **MT5 connection** (server, manager
-  login, password) + default group, each with a *Test connection*. The MT5 connection entered
-  here is forwarded to the Python gateway per request, so the gateway holds no broker secrets.
-- **/admin/transactions** (TECHNICAL role) — all deposits, filters, per-row **Sync**, and
-  **Sync all pending**.
+1. Client opens **/withdraw** → enters **amount**, **MT5 account** and **Whish phone number** → gets a
+   reference (`NEXQ-W-…`). One open request per MT5 account; nothing moves yet.
+2. Staff review it in **/admin/withdrawals**:
+   - **Approve** deducts the amount from the MT5 balance (negative `TRADE_BALANCE` with
+     `CHECK_MARGIN=1`, so MT5 refuses if free margin is too low). Exactly once: a DB claim stops
+     double-approval and MT5 is checked for an existing deal with the reference before deducting.
+     If MT5 refuses, the request shows **MT5 failed** and can be retried or rejected.
+   - **Reject** requires a reason (stored and logged).
+3. **Payout to the client's Whish number is manual** — the Whish API only collects payments.
+
+Statuses: `PENDING → PROCESSING → COMPLETED` (or `FAILED`, `REJECTED`).
+
+## USDT (TRC20) via 3Pay
+
+Configured in **Admin → Settings → 3Pay** (or `THREEPAY_*` in the server `.env`, which wins):
+API key, API secret, **webhook secret**, minimum deposit, on/off. Whitelist the server IP in the
+3Pay dashboard. Only USDT-TRC20 is used.
+
+**Deposits** — the client picks *USDT*, we create a 3Pay invoice (`/transaction/create`, with our
+webhook + return URLs) and send them to 3Pay's hosted page. When 3Pay confirms, MT5 is credited
+**what 3Pay credited us** (`depositedAmount`, i.e. after 3Pay's fee); the deposit shows both the
+amount sent and the amount credited. Confirmation arrives by **signed webhook**
+(`X-Webhook-Signature`, HMAC-SHA256 of the raw body with the webhook secret — forged/unsigned
+events get 401). With no webhook secret set, webhooks are only a hint and the status is read from
+3Pay's API. The return page and the sweep also poll, so a missed webhook never strands a deposit.
+
+**Payouts** — approving a USDT withdrawal deducts MT5 **first**, then calls `/withdrawal-request`
+(3Pay deducts a 2 USDT fee from the amount; the client sees what they'll receive).
+3Pay has no idempotency key, so outcomes are handled strictly:
+
+| 3Pay answer | Status | Next step |
+|---|---|---|
+| 200 completed | `COMPLETED` (tx hash shown) | — |
+| 202 executing / 201 pending | `PAYOUT_PENDING` | webhook / sweep / *Check 3Pay* |
+| 4xx (refused before broadcast) | `PAYOUT_FAILED` | *Retry payout* or *Refund to MT5* |
+| 5xx / timeout | `PAYOUT_UNKNOWN` | *Check 3Pay* finds it by wallet + amount; only then retry |
+
+MT5 is never deducted twice (retries reuse the deduction), a refund uses its own MT5 reference,
+and every step is logged.
+
+## Back office
+
+| Page | Admin | Operator |
+|---|---|---|
+| Deposits `/admin/transactions` | ✓ | ✓ |
+| Withdrawals `/admin/withdrawals` (approve / reject) | ✓ | ✓ |
+| Staff `/admin/users` (create, role, disable, reset password) | ✓ | |
+| Activity log `/admin/activity` | ✓ | |
+| Settings `/admin/settings` (Whish, MT5, min deposit) | ✓ | |
+
+Every request re-checks the account in the database, so disabling a staff account or changing
+its role takes effect immediately. The **activity log** records approvals, rejections (with
+reason), MT5 results, sign-ins (and failed attempts), account changes and settings changes
+(field names only — never secret values). The original `TECHNICAL` role is the Admin role.
 
 ## Stack
 

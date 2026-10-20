@@ -35,6 +35,10 @@ services:
       WHISH_SECRET: ${WHISH_SECRET:-}
       WHISH_WEBSITE_URL: ${WHISH_WEBSITE_URL:-}
       WHISH_USER_AGENT: ${WHISH_USER_AGENT:-}
+      THREEPAY_BASE_URL: ${THREEPAY_BASE_URL:-}
+      THREEPAY_API_KEY: ${THREEPAY_API_KEY:-}
+      THREEPAY_API_SECRET: ${THREEPAY_API_SECRET:-}
+      THREEPAY_WEBHOOK_SECRET: ${THREEPAY_WEBHOOK_SECRET:-}
     expose:
       - "3000" # internal only; Caddy terminates TLS and proxies to it
 

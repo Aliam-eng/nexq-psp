@@ -11,8 +11,11 @@ datasource db {
 
 // Status/role are kept as plain strings (fixed vocabulary) so app code can pass
 // literals freely. Postgres enums are an option later if you want DB-level checks:
-//   Role:     CLIENT | TECHNICAL
-//   TxStatus: PENDING | LINK_GENERATED | PAID | CREDITED | CREDIT_FAILED | FAILED
+//   Role:       CLIENT | TECHNICAL (back-office admin) | OPERATOR (back-office, no settings/users)
+//   TxStatus:   PENDING | LINK_GENERATED | PAID | CREDITED | CREDIT_FAILED | FAILED
+//   WdStatus:   PENDING | PROCESSING | COMPLETED | REJECTED | FAILED
+//               crypto payouts also: PAYOUT_PENDING | PAYOUT_FAILED | PAYOUT_UNKNOWN | REFUNDED
+//   Method:     WHISH | USDT_TRC20 (via 3Pay)
 
 model User {
   id        String   @id @default(cuid())
@@ -20,8 +23,10 @@ model User {
   name      String?
   password  String
   role      String   @default("CLIENT")
+  isActive  Boolean  @default(true) // disabled back-office accounts can't sign in
   accounts  TradingAccount[]
   txns      Transaction[]
+  withdrawalsDecided Withdrawal[]
   createdAt DateTime @default(now())
 }
 
@@ -63,9 +68,19 @@ model Transaction {
   // Human-facing reference shown to the client (NEXQ-XXXXXXXX)
   reference       String         @unique
 
+  // Payment rail: WHISH (Whish Pay) | USDT_TRC20 (3Pay)
+  method          String         @default("WHISH")
+
   // Whish Pay: the externalId we send on create (and query status with)
   whishExternalId String?        @unique
   whishpayUrl     String?
+
+  // 3Pay (USDT): invoice + on-chain details. For USDT deposits `amount` becomes the
+  // amount actually credited once confirmed; grossAmount is what the client sent.
+  threepayInvoiceNo String?      @unique
+  threepayTxId      String?
+  grossAmount       Float?
+  cryptoTxHash      String?
 
   // MT5 result
   mt5DealId       String?
@@ -82,6 +97,56 @@ model Transaction {
   updatedAt       DateTime       @updatedAt
 }
 
+// Client withdrawal request: entered on the public page, decided in the back office.
+// Approving deducts the amount from the MT5 account; the payout itself is manual.
+model Withdrawal {
+  id              String    @id @default(cuid())
+  reference       String    @unique // NEXQ-W-XXXXXXXX, also tagged on the MT5 deal comment
+  mt5Login        String
+  amount          Float
+  currency        String    @default("USD")
+  method          String    @default("WHISH") // WHISH (manual payout to phone) | USDT_TRC20 (3Pay payout)
+  phone           String?   // Whish payouts: client's Whish number
+  walletAddress   String?   // USDT payouts: client's TRC20 address
+  status          String    @default("PENDING")
+  rejectionReason String?
+  decidedBy       User?     @relation(fields: [decidedById], references: [id])
+  decidedById     String?
+  decidedAt       DateTime?
+  mt5DealId       String?
+  errorMessage    String?
+  // Concurrency lock while the MT5 deduction / payout runs (same idea as Transaction.creditingAt)
+  processingAt    DateTime?
+  // 3Pay payout (USDT): sent after the MT5 deduction succeeds
+  payoutId        String?   @unique
+  payoutTxHash    String?
+  payoutFee       Float?
+  payoutNet       Float?
+  payoutError     String?
+  payoutSentAt    DateTime?
+  refundDealId    String?   // MT5 deal that returned the money if the payout was abandoned
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([mt5Login])
+}
+
+// Who did what in the back office (append-only).
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorEmail String   // kept even if the account is later removed
+  action     String   // e.g. withdrawal.approve, withdrawal.reject, user.create, auth.login
+  entityType String?  // Withdrawal | User | Settings | Transaction
+  entityId   String?
+  details    String?  // JSON
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
+
 // Singleton-style config rows edited from the Technical dashboard.
 
 // Direct Whish Pay credentials (issued by Whish), sent as request headers.
@@ -93,8 +158,22 @@ model ProviderConfig {
   websiteUrl String?  // "websiteUrl" header
   userAgent  String?  // "User-Agent" header, exactly as issued by Whish
   minDeposit Float    @default(0) // minimum allowed deposit amount
-  enabled    Boolean  @default(false)
+  enabled    Boolean  @default(false) // deposits via Whish
+  withdrawalsEnabled Boolean @default(true) // Whish option on the withdraw page (payout is manual)
   updatedAt  DateTime @updatedAt
+}
+
+// 3Pay (USDT-TRC20) credentials. Server env (THREEPAY_*) overrides these, like Whish.
+model ThreePayConfig {
+  id            String   @id @default("threepay")
+  baseUrl       String?  @default("https://pay.3pa-y.com/api/v1")
+  apiKey        String?  // "apikey" header (public identifier)
+  apiSecret     String?  // "x-api-secret" header — store-at-rest only; encrypt before production use
+  webhookSecret String?  // verifies X-Webhook-Signature (HMAC-SHA256 of the raw body)
+  minDeposit    Float    @default(10)
+  enabled       Boolean  @default(false) // USDT deposits
+  withdrawalsEnabled Boolean @default(false) // USDT payouts
+  updatedAt     DateTime @updatedAt
 }
 
 model Mt5Config {

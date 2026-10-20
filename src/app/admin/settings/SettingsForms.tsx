@@ -9,6 +9,7 @@ type WhishCfg = {
   userAgent: string;
   minDeposit: number;
   enabled: boolean;
+  withdrawalsEnabled: boolean;
   hasSecret: boolean;
   callbackUrl: string;
   envFields: ("baseUrl" | "channel" | "secret" | "websiteUrl" | "userAgent")[]; // pinned by server .env
@@ -20,6 +21,17 @@ const WHISH_ENVIRONMENTS = [
   { label: "Sandbox", url: "https://partner.api.sbx.whish.money/itel-service/api" },
   { label: "Production", url: "https://api.whish.money/itel-service/api" },
 ];
+type ThreePayCfg = {
+  baseUrl: string;
+  apiKey: string;
+  hasApiSecret: boolean;
+  hasWebhookSecret: boolean;
+  minDeposit: number;
+  enabled: boolean;
+  withdrawalsEnabled: boolean;
+  webhookUrl: string;
+  envFields: ("baseUrl" | "apiKey" | "apiSecret" | "webhookSecret")[]; // pinned by server .env
+};
 type Mt5Cfg = {
   mt5Server: string;
   mt5Login: string;
@@ -61,10 +73,11 @@ function TestResult({ text }: { text: string | null }) {
   return <span className={`text-sm font-semibold ${ok ? "text-success" : "text-danger"}`}>{text}</span>;
 }
 
-export function SettingsForms({ whish, mt5 }: { whish: WhishCfg; mt5: Mt5Cfg }) {
+export function SettingsForms({ whish, threepay, mt5 }: { whish: WhishCfg; threepay: ThreePayCfg; mt5: Mt5Cfg }) {
   return (
     <>
       <WhishForm cfg={whish} />
+      <ThreePayForm cfg={threepay} />
       <Mt5Form cfg={mt5} />
     </>
   );
@@ -74,14 +87,14 @@ export function SettingsForms({ whish, mt5 }: { whish: WhishCfg; mt5: Mt5Cfg }) 
 export function SettingsSection({
   title,
   desc,
-  toggle,
+  toggles,
   onSubmit,
   footer,
   children,
 }: {
   title: string;
   desc: React.ReactNode;
-  toggle?: { on: boolean; onChange: (v: boolean) => void };
+  toggles?: { label: string; on: boolean; onChange: (v: boolean) => void }[];
   onSubmit: (e: React.FormEvent) => void;
   footer: React.ReactNode;
   children: React.ReactNode;
@@ -91,12 +104,17 @@ export function SettingsSection({
       <div>
         <h2 className="text-base font-extrabold text-ink">{title}</h2>
         <p className="mt-1 text-sm leading-relaxed text-ink-muted">{desc}</p>
-        {toggle && (
-          <div className="mt-4 flex items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-2.5">
-            <Toggle on={toggle.on} onChange={toggle.onChange} />
-            <span className={`text-sm font-semibold ${toggle.on ? "text-success" : "text-ink-muted"}`}>
-              {toggle.on ? "Live" : "Off"}
-            </span>
+        {toggles && toggles.length > 0 && (
+          <div className="mt-4 divide-y divide-line rounded-xl border border-line bg-surface">
+            {toggles.map((t) => (
+              <div key={t.label} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                <span className="text-sm font-semibold text-ink">{t.label}</span>
+                <span className="flex items-center gap-2">
+                  <span className={`text-xs font-semibold ${t.on ? "text-success" : "text-ink-dim"}`}>{t.on ? "Live" : "Off"}</span>
+                  <Toggle on={t.on} onChange={t.onChange} />
+                </span>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -135,6 +153,7 @@ function WhishForm({ cfg }: { cfg: WhishCfg }) {
         userAgent: editable("userAgent", form.userAgent),
         minDeposit: Number(form.minDeposit) || 0,
         enabled: form.enabled,
+        withdrawalsEnabled: form.withdrawalsEnabled,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -155,8 +174,11 @@ function WhishForm({ cfg }: { cfg: WhishCfg }) {
   return (
     <SettingsSection
       title="Whish Pay"
-      desc="Direct Whish API credentials, as issued by Whish. Turn it on to accept deposits."
-      toggle={{ on: form.enabled, onChange: (v) => setForm({ ...form, enabled: v }) }}
+      desc="Direct Whish API credentials, as issued by Whish. Whish withdrawals are paid out manually by your team."
+      toggles={[
+        { label: "Deposits", on: form.enabled, onChange: (v) => setForm({ ...form, enabled: v }) },
+        { label: "Withdrawals", on: form.withdrawalsEnabled, onChange: (v) => setForm({ ...form, withdrawalsEnabled: v }) },
+      ]}
       onSubmit={save}
       footer={
         <>
@@ -230,6 +252,116 @@ function WhishForm({ cfg }: { cfg: WhishCfg }) {
   );
 }
 
+function ThreePayForm({ cfg }: { cfg: ThreePayCfg }) {
+  const [form, setForm] = useState({ ...cfg, apiSecret: "", webhookSecret: "" });
+  const [copied, setCopied] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [test, setTest] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const pinned = (f: ThreePayCfg["envFields"][number]) => cfg.envFields.includes(f);
+  const editable = (f: ThreePayCfg["envFields"][number], v: string) => (pinned(f) ? undefined : v || undefined);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setMsg(null);
+    const res = await fetch("/api/config/threepay", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseUrl: editable("baseUrl", form.baseUrl),
+        apiKey: editable("apiKey", form.apiKey),
+        apiSecret: editable("apiSecret", form.apiSecret),
+        webhookSecret: editable("webhookSecret", form.webhookSecret),
+        minDeposit: Number(form.minDeposit) || 1,
+        enabled: form.enabled,
+        withdrawalsEnabled: form.withdrawalsEnabled,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setSaving(false);
+    setMsg(res.ok ? "Saved." : data.error || "Save failed");
+    if (res.ok) setForm((f) => ({ ...f, apiSecret: "", webhookSecret: "", hasApiSecret: data.hasApiSecret, hasWebhookSecret: data.hasWebhookSecret }));
+  }
+
+  async function runTest() {
+    setTesting(true);
+    setTest("Testing…");
+    const res = await fetch("/api/config/threepay/test", { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setTesting(false);
+    setTest(data.ok ? `Connected (${data.detail})` : `Failed: ${data.detail || data.error}`);
+  }
+
+  return (
+    <SettingsSection
+      title="3Pay · USDT (TRC20)"
+      desc="USDT deposits and payouts through 3Pay. Register this server's IP in the 3Pay dashboard (Settings → IP Whitelist) first."
+      toggles={[
+        { label: "Deposits", on: form.enabled, onChange: (v) => setForm({ ...form, enabled: v }) },
+        { label: "Withdrawals", on: form.withdrawalsEnabled, onChange: (v) => setForm({ ...form, withdrawalsEnabled: v }) },
+      ]}
+      onSubmit={save}
+      footer={
+        <>
+          <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving…" : "Save changes"}</button>
+          <button type="button" onClick={runTest} disabled={testing} className="btn-ghost">{testing ? "Testing…" : "Test connection"}</button>
+          {msg && <span className="text-sm text-ink-muted">{msg}</span>}
+          <TestResult text={test} />
+        </>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="API key" hint={pinned("apiKey") ? ENV_HINT : "The apikey from Settings → API Credentials"}>
+          <input readOnly={pinned("apiKey")} value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} className="field-input font-mono" />
+        </Field>
+        <Field label="API secret" hint={pinned("apiSecret") ? ENV_HINT : cfg.hasApiSecret ? "Saved · leave blank to keep it" : "The x-api-secret"}>
+          <input type="password" disabled={pinned("apiSecret")} value={form.apiSecret} onChange={(e) => setForm({ ...form, apiSecret: e.target.value })} className="field-input" />
+        </Field>
+        <Field label="Webhook secret" hint={pinned("webhookSecret") ? ENV_HINT : cfg.hasWebhookSecret ? "Saved · leave blank to keep it" : "Settings → Webhook Secret — required to trust webhooks"}>
+          <input type="password" disabled={pinned("webhookSecret")} value={form.webhookSecret} onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })} className="field-input" />
+        </Field>
+        <Field label="Minimum deposit (USDT)" hint="3Pay's own minimum is 1 USDT">
+          <input
+            type="number"
+            min="1"
+            step="0.01"
+            value={form.minDeposit}
+            onChange={(e) => setForm({ ...form, minDeposit: e.target.value as unknown as number })}
+            className="field-input font-mono"
+          />
+        </Field>
+        <Field label="API base URL" hint={pinned("baseUrl") ? ENV_HINT : "Normally https://pay.3pa-y.com/api/v1"}>
+          <input readOnly={pinned("baseUrl")} value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} className="field-input font-mono text-xs" />
+        </Field>
+      </div>
+
+      <div className="mt-5 border-t border-line pt-5">
+        <p className="text-[13px] font-semibold text-ink">Webhook URL <span className="font-normal text-ink-muted">· sent to 3Pay with every deposit (becomes your account default)</span></p>
+        <div className="mt-1.5 flex items-center gap-2">
+          <code className="flex-1 truncate rounded-lg bg-surface-overlay px-3 py-2 font-mono text-xs text-brand-400">{cfg.webhookUrl}</code>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard?.writeText(cfg.webhookUrl);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+            className="btn-ghost px-3 py-1.5 text-xs"
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <p className="field-hint">
+          Payout webhooks also go here. Without a webhook secret, events are only used as a hint and re-checked through 3Pay&apos;s API.
+          Payouts: 3Pay deducts a 2 USDT fee from each TRC20 payout.
+        </p>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function Mt5Form({ cfg }: { cfg: Mt5Cfg }) {
   const [form, setForm] = useState({ ...cfg, mt5Password: "" });
   const [msg, setMsg] = useState<string | null>(null);
@@ -272,7 +404,7 @@ function Mt5Form({ cfg }: { cfg: Mt5Cfg }) {
     <SettingsSection
       title="MT5 · WebAPI"
       desc="Manager connection used to credit paid deposits to client accounts. The broker must allowlist this server's IP."
-      toggle={{ on: form.enabled, onChange: (v) => setForm({ ...form, enabled: v }) }}
+      toggles={[{ label: "Connection", on: form.enabled, onChange: (v) => setForm({ ...form, enabled: v }) }]}
       onSubmit={save}
       footer={
         <>

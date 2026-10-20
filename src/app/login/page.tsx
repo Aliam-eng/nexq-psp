@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { currentStaff } from "@/lib/access";
 import { Logo } from "@/components/ui";
 import { LoginForm } from "./LoginForm";
 
 export default async function LoginPage() {
-  const session = await getSession();
-  if (session) redirect(session.role === "TECHNICAL" ? "/admin/transactions" : "/deposit");
+  // Same DB-verified check as the admin pages: a disabled/deleted account with a
+  // still-valid cookie must see the login form, not bounce between /login and /admin.
+  if (await currentStaff()) redirect("/admin/transactions");
 
   return (
     <div className="grid min-h-screen md:grid-cols-2">

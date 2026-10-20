@@ -8,7 +8,7 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     environment: "node",
-    // Never let real Whish credentials from .env reach a test (Prisma auto-loads .env,
+    // Never let real Whish/3Pay credentials from .env reach a test (Prisma auto-loads .env,
     // but does not override variables that are already set — even to "").
     env: {
       WHISH_BASE_URL: "",
@@ -16,6 +16,10 @@ export default defineConfig({
       WHISH_SECRET: "",
       WHISH_WEBSITE_URL: "",
       WHISH_USER_AGENT: "",
+      THREEPAY_BASE_URL: "",
+      THREEPAY_API_KEY: "",
+      THREEPAY_API_SECRET: "",
+      THREEPAY_WEBHOOK_SECRET: "",
     },
     // Integration tests share one Postgres database — run files one at a time.
     fileParallelism: false,

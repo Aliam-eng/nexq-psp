@@ -2,10 +2,21 @@
 
 import { useRef, useState } from "react";
 
-export function DepositForm({ minDeposit = 0 }: { minDeposit?: number }) {
+export type DepositMethod = { key: "WHISH" | "USDT_TRC20"; min: number };
+
+const METHOD_INFO = {
+  WHISH: { label: "Whish Pay", sub: "Pay from your Whish wallet", unit: "USD", via: "Whish" },
+  USDT_TRC20: { label: "USDT", sub: "TRC20 network", unit: "USDT", via: "USDT" },
+} as const;
+
+export function DepositForm({ methods }: { methods: DepositMethod[] }) {
+  const [method, setMethod] = useState<DepositMethod["key"]>(methods[0]?.key ?? "WHISH");
   const [mt5Login, setMt5Login] = useState("");
   const [amount, setAmount] = useState("");
-  const currency = "USD"; // MT5 accounts are USD (Whish also supports LBP)
+  const selected = methods.find((m) => m.key === method) ?? methods[0];
+  const minDeposit = selected?.min ?? 0;
+  const info = METHOD_INFO[method];
+  const currency = info.unit; // MT5 accounts are USD; 1 USDT is credited as 1 USD
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const submitting = useRef(false); // guards against double-submit
@@ -41,7 +52,7 @@ export function DepositForm({ minDeposit = 0 }: { minDeposit?: number }) {
       const res = await fetch("/api/deposits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mt5Login, amount, currency }),
+        body: JSON.stringify({ mt5Login, amount, currency: "USD", method }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.collectUrl) {
@@ -50,7 +61,7 @@ export function DepositForm({ minDeposit = 0 }: { minDeposit?: number }) {
         setError(data.error || "We couldn't start the payment. Please try again.");
         return;
       }
-      // Success — navigating away to Whish; keep the guard locked.
+      // Success — navigating away to Whish / 3Pay; keep the guard locked.
       window.location.href = data.collectUrl;
     } catch {
       submitting.current = false;
@@ -60,14 +71,45 @@ export function DepositForm({ minDeposit = 0 }: { minDeposit?: number }) {
   }
 
   const quickAmounts = [100, 250, 500, 1000].filter((v) => v >= minDeposit);
+  if (methods.length === 0) {
+    return (
+      <div className="card p-6 sm:p-7">
+        <h2 className="text-lg font-extrabold text-ink">Deposits are paused</h2>
+        <p className="mt-1 text-sm text-ink-muted">We&apos;re not accepting deposits right now. Please check back soon.</p>
+      </div>
+    );
+  }
   return (
     <form onSubmit={pay} className="card overflow-hidden">
       <div className="bg-brand-gradient h-1" />
       <div className="space-y-6 p-6 sm:p-7">
         <div>
           <h2 className="text-lg font-extrabold text-ink">New deposit</h2>
-          <p className="text-sm text-ink-muted">Credited to your MT5 account in {currency}.</p>
+          <p className="text-sm text-ink-muted">Credited to your MT5 account in USD.</p>
         </div>
+
+        {methods.length > 1 && (
+          <div role="radiogroup" aria-label="Payment method" className="grid grid-cols-2 gap-2">
+            {methods.map((m) => (
+              <button
+                key={m.key}
+                type="button"
+                role="radio"
+                aria-checked={method === m.key}
+                onClick={() => {
+                  setMethod(m.key);
+                  setError(null);
+                }}
+                className={`rounded-xl border p-3 text-left transition ${
+                  method === m.key ? "border-brand bg-brand/10" : "border-line bg-white hover:border-line-strong"
+                }`}
+              >
+                <span className="block text-sm font-bold text-ink">{METHOD_INFO[m.key].label}</span>
+                <span className="block text-xs text-ink-muted">{METHOD_INFO[m.key].sub}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Amount — the headline figure */}
         <div>
@@ -131,11 +173,17 @@ export function DepositForm({ minDeposit = 0 }: { minDeposit?: number }) {
           <span className="field-hint">You&apos;ll find it in your nexQ welcome email or MT5 terminal.</span>
         </div>
 
-        {validAmount && mt5Login && (
+        {validAmount && mt5Login && method === "WHISH" && (
           <div className="flex justify-between rounded-xl bg-surface-raised px-4 py-3 text-sm">
             <span className="text-ink-muted">Credited to {mt5Login}</span>
-            <span className="font-semibold tabular-nums text-ink">{numeric.toFixed(2)} {currency}</span>
+            <span className="font-semibold tabular-nums text-ink">{numeric.toFixed(2)} USD</span>
           </div>
+        )}
+        {method === "USDT_TRC20" && (
+          <p className="rounded-xl bg-surface-raised px-4 py-3 text-xs leading-relaxed text-ink-muted">
+            Send <strong className="text-ink">USDT on the TRON (TRC20) network only</strong> to the address shown on the next page.
+            Your MT5 account is credited 1 USD per USDT received, after the processing fee.
+          </p>
         )}
 
         {error && (
@@ -145,16 +193,17 @@ export function DepositForm({ minDeposit = 0 }: { minDeposit?: number }) {
         <button type="submit" disabled={belowMin || loading} className="btn-primary w-full py-3.5 text-[15px]">
           {loading ? (
             <>
-              <Spinner /> Connecting to Whish…
+              <Spinner /> {method === "WHISH" ? "Connecting to Whish…" : "Preparing your USDT payment…"}
             </>
           ) : validAmount ? (
-            `Pay ${numeric.toFixed(2)} ${currency} with Whish →`
+            method === "WHISH" ? `Pay ${numeric.toFixed(2)} USD with Whish →` : `Pay ${numeric.toFixed(2)} USDT →`
           ) : (
-            "Pay with Whish →"
+            `Pay with ${info.via} →`
           )}
         </button>
         <p className="flex items-center justify-center gap-1.5 text-xs text-ink-dim">
-          <LockIcon /> Secured by Whish Pay · you&apos;ll confirm in the Whish app
+          <LockIcon />{" "}
+          {method === "WHISH" ? <>Secured by Whish Pay · you&apos;ll confirm in the Whish app</> : <>Credited automatically once confirmed on-chain</>}
         </p>
       </div>
     </form>

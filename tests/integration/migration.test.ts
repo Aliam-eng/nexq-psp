@@ -15,6 +15,7 @@ const SCHEMA = "migration_check";
 describe.skipIf(!hasTestDb)("Rival → Whish migration", () => {
   let url: string;
   let db: PrismaClient;
+  let later: string[] = [];
 
   const exec = (sql: string) => prismaCli(`db execute --url "${url}" --stdin`, url, sql);
   const applyFile = (dir: string) =>
@@ -32,8 +33,10 @@ describe.skipIf(!hasTestDb)("Rival → Whish migration", () => {
       .filter((d) => d.isDirectory())
       .map((d) => d.name)
       .sort();
-    expect(dirs.at(-1)).toBe(WHISH_MIGRATION);
-    for (const dir of dirs.slice(0, -1)) applyFile(dir);
+    const at = dirs.indexOf(WHISH_MIGRATION);
+    expect(at).toBeGreaterThan(0);
+    for (const dir of dirs.slice(0, at)) applyFile(dir);
+    later = dirs.slice(at + 1);
 
     exec(`
       INSERT INTO "ProviderConfig" (id, "apiKey", "minDeposit", enabled, "webhookSecret", "updatedAt")
@@ -45,6 +48,7 @@ describe.skipIf(!hasTestDb)("Rival → Whish migration", () => {
     `);
 
     applyFile(WHISH_MIGRATION);
+    for (const dir of later) applyFile(dir); // newer migrations must also apply on top
     db = new PrismaClient({ datasourceUrl: url });
   });
 

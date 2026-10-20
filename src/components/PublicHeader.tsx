@@ -1,4 +1,5 @@
 import { Logo } from "./ui";
+import { PublicTabs } from "./PublicTabs";
 
 // Header for the public (no-login) deposit pages — the charcoal bar from nexqcapital.com.
 export function PublicHeader() {
@@ -6,6 +7,7 @@ export function PublicHeader() {
     <header className="sticky top-0 z-30 bg-charcoal">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-3.5">
         <Logo href="/deposit" />
+        <PublicTabs />
         <a
           href="https://www.nexqcapital.com/"
           className="btn-on-dark hidden text-[13px] sm:inline-flex"
@@ -28,7 +30,7 @@ export function PublicFooter() {
         <div className="max-w-xl space-y-3">
           <Logo href="/deposit" />
           <p>
-            Deposits are processed through Whish Pay and credited to your nexQ MT5 trading account. Trading leveraged
+            Payments by Whish Pay or USDT (TRC20) are credited to your nexQ MT5 trading account. Trading leveraged
             products carries a high level of risk and may not be suitable for all investors.
           </p>
         </div>
